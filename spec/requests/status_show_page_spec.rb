@@ -7,7 +7,7 @@ RSpec.describe 'Statuses' do
     include AccountsHelper
 
     def site_hostname
-      local_domain_uri.host
+      Rails.configuration.x.web_domain || Rails.configuration.x.local_domain
     end
 
     it 'has valid opengraph tags' do

@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef } from 'react';
 
 import {
   defineMessages,
@@ -29,7 +29,6 @@ import { HASHTAG_REGEX } from 'mastodon/utils/hashtags';
 
 const messages = defineMessages({
   placeholder: { id: 'search.placeholder', defaultMessage: 'Search' },
-  clearSearch: { id: 'search.clear', defaultMessage: 'Clear search' },
   placeholderSignedIn: {
     id: 'search.search_or_paste',
     defaultMessage: 'Search or paste URL',
@@ -49,34 +48,6 @@ const labelForRecentSearch = (search: RecentSearch) => {
 
 const unfocus = () => {
   document.querySelector('.ui')?.parentElement?.focus();
-};
-
-const ClearButton: React.FC<{
-  onClick: () => void;
-  hasValue: boolean;
-}> = ({ onClick, hasValue }) => {
-  const intl = useIntl();
-
-  return (
-    <div
-      className={classNames('search__icon-wrapper', { 'has-value': hasValue })}
-    >
-      <Icon id='search' icon={SearchIcon} className='search__icon' />
-      <button
-        type='button'
-        onClick={onClick}
-        className='search__icon search__icon--clear-button'
-        tabIndex={hasValue ? undefined : -1}
-        aria-hidden={!hasValue}
-      >
-        <Icon
-          id='times-circle'
-          icon={CancelIcon}
-          aria-label={intl.formatMessage(messages.clearSearch)}
-        />
-      </button>
-    </div>
-  );
 };
 
 interface SearchOption {
@@ -101,10 +72,6 @@ export const Search: React.FC<{
   const [expanded, setExpanded] = useState(false);
   const [selectedOption, setSelectedOption] = useState(-1);
   const [quickActions, setQuickActions] = useState<SearchOption[]>([]);
-  useEffect(() => {
-    setValue(initialValue ?? '');
-    setQuickActions([]);
-  }, [initialValue]);
   const searchOptions: SearchOption[] = [];
 
   if (searchEnabled) {
@@ -139,6 +106,19 @@ export const Search: React.FC<{
         },
       },
       {
+        key: 'prompt-my',
+        label: (
+          <>
+            <mark>my:</mark>{' '}
+            <FormattedList type='disjunction' value={['fav', 'bm']} />
+          </>
+        ),
+        action: (e) => {
+          e.preventDefault();
+          insertText('my:');
+        },
+      },
+      {
         key: 'prompt-language',
         label: (
           <>
@@ -165,6 +145,22 @@ export const Search: React.FC<{
         action: (e) => {
           e.preventDefault();
           insertText('from:');
+        },
+      },
+      {
+        key: 'prompt-domain',
+        label: (
+          <>
+            <mark>domain:</mark>{' '}
+            <FormattedMessage
+              id='search_popout.domain'
+              defaultMessage='user domain'
+            />
+          </>
+        ),
+        action: (e) => {
+          e.preventDefault();
+          insertText('domain:');
         },
       },
       {
@@ -231,6 +227,19 @@ export const Search: React.FC<{
           insertText('in:');
         },
       },
+      {
+        key: 'prompt-order',
+        label: (
+          <>
+            <mark>order:</mark>{' '}
+            <FormattedList type='disjunction' value={['desc', 'asc']} />
+          </>
+        ),
+        action: (e) => {
+          e.preventDefault();
+          insertText('order:');
+        },
+      },
     );
   }
 
@@ -254,7 +263,7 @@ export const Search: React.FC<{
     },
     forget: (e) => {
       e.stopPropagation();
-      void dispatch(forgetSearchResult(search));
+      void dispatch(forgetSearchResult(search.q));
     },
   }));
 
@@ -409,7 +418,6 @@ export const Search: React.FC<{
     setValue('');
     setQuickActions([]);
     setSelectedOption(-1);
-    unfocus();
   }, [setValue, setQuickActions, setSelectedOption]);
 
   const handleKeyDown = useCallback(
@@ -504,7 +512,19 @@ export const Search: React.FC<{
         onBlur={handleBlur}
       />
 
-      <ClearButton hasValue={hasValue} onClick={handleClear} />
+      <button type='button' className='search__icon' onClick={handleClear}>
+        <Icon
+          id='search'
+          icon={SearchIcon}
+          className={hasValue ? '' : 'active'}
+        />
+        <Icon
+          id='times-circle'
+          icon={CancelIcon}
+          className={hasValue ? 'active' : ''}
+          aria-label={intl.formatMessage(messages.placeholder)}
+        />
+      </button>
 
       <div className='search__popout'>
         {!hasValue && (
@@ -519,10 +539,8 @@ export const Search: React.FC<{
             <div className='search__popout__menu'>
               {recentOptions.length > 0 ? (
                 recentOptions.map(({ label, key, action, forget }, i) => (
-                  <div
+                  <button
                     key={key}
-                    tabIndex={0}
-                    role='button'
                     onMouseDown={action}
                     className={classNames(
                       'search__popout__menu__item search__popout__menu__item--flex',
@@ -533,7 +551,7 @@ export const Search: React.FC<{
                     <button className='icon-button' onMouseDown={forget}>
                       <Icon id='times' icon={CloseIcon} />
                     </button>
-                  </div>
+                  </button>
                 ))
               ) : (
                 <div className='search__popout__menu__message'>

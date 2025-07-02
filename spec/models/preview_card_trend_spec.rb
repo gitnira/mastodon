@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe PreviewCardTrend do
-  it_behaves_like 'RankedTrend'
+  include_examples 'RankedTrend'
 
   describe 'Associations' do
     it { is_expected.to belong_to(:preview_card).required }

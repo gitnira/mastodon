@@ -2,19 +2,24 @@
 
 class DeleteAccountService < BaseService
   include Payloadable
+  include RegistrationLimitationHelper
 
   ASSOCIATIONS_ON_SUSPEND = %w(
     account_notes
     account_pins
     active_relationships
     aliases
+    antennas
     block_relationships
     blocked_by_relationships
+    bookmark_categories
+    circles
     conversation_mutes
     conversations
     custom_filters
     domain_blocks
     featured_tags
+    fetchable_pending_statuses
     follow_requests
     list_accounts
     migrations
@@ -23,8 +28,11 @@ class DeleteAccountService < BaseService
     notifications
     owned_lists
     passive_relationships
+    pending_follow_requests
+    pending_statuses
     report_notes
     scheduled_statuses
+    scheduled_expiration_statuses
     status_pins
   ).freeze
 
@@ -36,11 +44,14 @@ class DeleteAccountService < BaseService
     account_notes
     account_pins
     aliases
+    antenna_accounts
+    circle_accounts
     conversation_mutes
     conversations
     custom_filters
     domain_blocks
     featured_tags
+    fetchable_pending_statuses
     follow_requests
     list_accounts
     migrations
@@ -48,7 +59,10 @@ class DeleteAccountService < BaseService
     muted_by_relationships
     notifications
     owned_lists
+    pending_follow_requests
+    pending_statuses
     scheduled_statuses
+    scheduled_expiration_statuses
     status_pins
     tag_follows
   ).freeze
@@ -139,6 +153,8 @@ class DeleteAccountService < BaseService
     else
       @account.user.destroy
     end
+
+    reset_registration_limit_caches!
   end
 
   def purge_content!
@@ -150,10 +166,12 @@ class DeleteAccountService < BaseService
     purge_polls!
     purge_generated_notifications!
     purge_favourites!
+    purge_emoji_reactions!
     purge_bookmarks!
     purge_feeds!
     purge_other_associations!
 
+    remove_ng_rule_history_relations! unless keep_account_record?
     @account.destroy unless keep_account_record?
   end
 
@@ -197,6 +215,16 @@ class DeleteAccountService < BaseService
     end
   end
 
+  def purge_emoji_reactions!
+    @account.emoji_reactions.in_batches do |reactions|
+      reactions.each do |reaction|
+        reaction.status.refresh_emoji_reactions_grouped_by_name!
+      end
+      Chewy.strategy.current.update(StatusesIndex, reactions.pluck(:status_id)) if Chewy.enabled?
+      reactions.delete_all
+    end
+  end
+
   def purge_bookmarks!
     @account.bookmarks.in_batches do |bookmarks|
       Chewy.strategy.current.update(StatusesIndex, bookmarks.pluck(:status_id)) if Chewy.enabled?
@@ -215,6 +243,7 @@ class DeleteAccountService < BaseService
 
     FeedManager.instance.clean_feeds!(:home, [@account.id])
     FeedManager.instance.clean_feeds!(:list, @account.owned_lists.pluck(:id))
+    FeedManager.instance.clean_feeds!(:antenna, @account.antennas.pluck(:id))
   end
 
   def purge_profile!
@@ -244,6 +273,10 @@ class DeleteAccountService < BaseService
     @account.avatar.destroy
     @account.header.destroy
     @account.save!
+  end
+
+  def remove_ng_rule_history_relations!
+    @account.ng_rule_histories.update_all(account_id: nil)
   end
 
   def fulfill_deletion_request!

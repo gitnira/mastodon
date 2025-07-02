@@ -4,7 +4,96 @@ require 'rails_helper'
 
 RSpec.describe Account::Interactions do
   let(:account)            { Fabricate(:account) }
+  let(:account_id)         { account.id }
+  let(:account_ids)        { [account_id] }
   let(:target_account)     { Fabricate(:account) }
+  let(:target_account_id)  { target_account.id }
+  let(:target_account_ids) { [target_account_id] }
+  let(:follower_account)   { Fabricate(:account, username: 'follower') }
+  let(:followee_account)   { Fabricate(:account, username: 'followee') }
+
+  describe '.following_map' do
+    subject { Account.following_map(target_account_ids, account_id) }
+
+    context 'when Account with Follow' do
+      it 'returns { target_account_id => true }' do
+        Fabricate(:follow, account: account, target_account: target_account)
+        expect(subject).to eq(target_account_id => { reblogs: true, notify: false, languages: nil })
+      end
+    end
+
+    context 'when Account without Follow' do
+      it 'returns {}' do
+        expect(subject).to eq({})
+      end
+    end
+  end
+
+  describe '.followed_by_map' do
+    subject { Account.followed_by_map(target_account_ids, account_id) }
+
+    context 'when Account with Follow' do
+      it 'returns { target_account_id => true }' do
+        Fabricate(:follow, account: target_account, target_account: account)
+        expect(subject).to eq(target_account_id => true)
+      end
+    end
+
+    context 'when Account without Follow' do
+      it 'returns {}' do
+        expect(subject).to eq({})
+      end
+    end
+  end
+
+  describe '.blocking_map' do
+    subject { Account.blocking_map(target_account_ids, account_id) }
+
+    context 'when Account with Block' do
+      it 'returns { target_account_id => true }' do
+        Fabricate(:block, account: account, target_account: target_account)
+        expect(subject).to eq(target_account_id => true)
+      end
+    end
+
+    context 'when Account without Block' do
+      it 'returns {}' do
+        expect(subject).to eq({})
+      end
+    end
+  end
+
+  describe '.muting_map' do
+    subject { Account.muting_map(target_account_ids, account_id) }
+
+    context 'when Account with Mute' do
+      before do
+        Fabricate(:mute, target_account: target_account, account: account, hide_notifications: hide)
+      end
+
+      context 'when Mute#hide_notifications?' do
+        let(:hide) { true }
+
+        it 'returns { target_account_id => { notifications: true } }' do
+          expect(subject).to eq(target_account_id => { notifications: true })
+        end
+      end
+
+      context 'when not Mute#hide_notifications?' do
+        let(:hide) { false }
+
+        it 'returns { target_account_id => { notifications: false } }' do
+          expect(subject).to eq(target_account_id => { notifications: false })
+        end
+      end
+    end
+
+    context 'when Account without Mute' do
+      it 'returns {}' do
+        expect(subject).to eq({})
+      end
+    end
+  end
 
   describe '#follow!' do
     it 'creates and returns Follow' do
@@ -328,6 +417,43 @@ RSpec.describe Account::Interactions do
     context 'when not followed by target_account' do
       it 'returns false' do
         expect(subject).to be false
+      end
+    end
+  end
+
+  describe '#followed_by_domain?' do
+    subject { account.followed_by_domain?('example.com') }
+
+    let(:target_account) { Fabricate(:account, domain: 'example.com', uri: 'https://example.com/actor') }
+
+    context 'when followed by target_account' do
+      it 'returns true' do
+        account.passive_relationships.create(account: target_account)
+        expect(subject).to be true
+      end
+    end
+
+    context 'when not followed by target_account' do
+      it 'returns false' do
+        expect(subject).to be false
+      end
+    end
+
+    context 'with status' do
+      subject { account.followed_by_domain?('example.com', '2022/12/24 10:00:00') }
+
+      context 'when followed by target_account since the time' do
+        it 'returns true' do
+          account.passive_relationships.create(account: target_account, created_at: '2022/12/22 10:00:00')
+          expect(subject).to be true
+        end
+      end
+
+      context 'when followed by target_account after the time' do
+        it 'returns false' do
+          account.passive_relationships.create(account: target_account, created_at: '2022/12/26 10:00:00')
+          expect(subject).to be false
+        end
       end
     end
   end
@@ -660,6 +786,22 @@ RSpec.describe Account::Interactions do
 
     it 'includes only the list from the active follower and from oneself' do
       expect(account.lists_for_local_distribution.to_a).to contain_exactly(follower_list, self_list)
+    end
+  end
+
+  describe '#mutuals' do
+    subject { account.mutuals }
+
+    context 'when following target_account' do
+      it 'mutual one' do
+        account.follow!(target_account)
+        target_account.follow!(account)
+        follower_account.follow!(account)
+        account.follow!(followee_account)
+
+        expect(subject.count).to eq 1
+        expect(subject.first.id).to eq target_account.id
+      end
     end
   end
 end

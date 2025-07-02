@@ -6,6 +6,8 @@ import classNames from 'classnames';
 import { Helmet } from 'react-helmet';
 import { withRouter } from 'react-router-dom';
 
+import { createSelector } from '@reduxjs/toolkit';
+import { List as ImmutableList } from 'immutable';
 import ImmutablePropTypes from 'react-immutable-proptypes';
 import ImmutablePureComponent from 'react-immutable-pure-component';
 import { connect } from 'react-redux';
@@ -31,12 +33,15 @@ import {
   replyCompose,
   mentionCompose,
   directCompose,
+  insertReferenceCompose,
 } from '../../actions/compose';
 import {
   initDomainBlockModal,
   unblockDomain,
 } from '../../actions/domain_blocks';
 import {
+  emojiReact,
+  unEmojiReact,
   toggleFavourite,
   bookmark,
   unbookmark,
@@ -60,10 +65,9 @@ import {
 } from '../../actions/statuses';
 import ColumnHeader from '../../components/column_header';
 import { textForScreenReader, defaultMediaVisibility } from '../../components/status';
-import { StatusQuoteManager } from '../../components/status_quoted';
-import { deleteModal } from '../../initial_state';
+import StatusContainer from '../../containers/status_container';
+import { bookmarkCategoryNeeded, deleteModal } from '../../initial_state';
 import { makeGetStatus, makeGetPictureInPicture } from '../../selectors';
-import { getAncestorsIds, getDescendantsIds } from 'mastodon/selectors/contexts';
 import Column from '../ui/components/column';
 import { attachFullscreenListener, detachFullscreenListener, isFullscreen } from '../ui/util/fullscreen';
 
@@ -82,15 +86,77 @@ const makeMapStateToProps = () => {
   const getStatus = makeGetStatus();
   const getPictureInPicture = makeGetPictureInPicture();
 
+  const getReferenceIds = createSelector([
+    (state, { id }) => state.getIn(['contexts', 'references', id]) || ImmutableList(),
+  ], (references) => {
+    return references;
+  });
+
+  const getAncestorsIds = createSelector([
+    (_, { id }) => id,
+    state => state.getIn(['contexts', 'inReplyTos']),
+  ], (statusId, inReplyTos) => {
+    let ancestorsIds = ImmutableList();
+    ancestorsIds = ancestorsIds.withMutations(mutable => {
+      let id = statusId;
+
+      while (id && !mutable.includes(id)) {
+        mutable.unshift(id);
+        id = inReplyTos.get(id);
+      }
+    });
+
+    return ancestorsIds;
+  });
+
+  const getDescendantsIds = createSelector([
+    (_, { id }) => id,
+    state => state.getIn(['contexts', 'replies']),
+    state => state.get('statuses'),
+  ], (statusId, contextReplies, statuses) => {
+    let descendantsIds = [];
+    const ids = [statusId];
+
+    while (ids.length > 0) {
+      let id        = ids.pop();
+      const replies = contextReplies.get(id);
+
+      if (statusId !== id) {
+        descendantsIds.push(id);
+      }
+
+      if (replies) {
+        replies.reverse().forEach(reply => {
+          if (!ids.includes(reply) && !descendantsIds.includes(reply) && statusId !== reply) ids.push(reply);
+        });
+      }
+    }
+
+    let insertAt = descendantsIds.findIndex((id) => statuses.get(id).get('in_reply_to_account_id') !== statuses.get(id).get('account'));
+    if (insertAt !== -1) {
+      descendantsIds.forEach((id, idx) => {
+        if (idx > insertAt && statuses.get(id).get('in_reply_to_account_id') === statuses.get(id).get('account')) {
+          descendantsIds.splice(idx, 1);
+          descendantsIds.splice(insertAt, 0, id);
+          insertAt += 1;
+        }
+      });
+    }
+
+    return ImmutableList(descendantsIds);
+  });
+
   const mapStateToProps = (state, props) => {
     const status = getStatus(state, { id: props.params.statusId, contextType: 'detailed' });
 
-    let ancestorsIds   = [];
-    let descendantsIds = [];
+    let ancestorsIds   = ImmutableList();
+    let descendantsIds = ImmutableList();
+    let referenceIds   = ImmutableList();
 
     if (status) {
-      ancestorsIds   = getAncestorsIds(state, status.get('in_reply_to_id'));
-      descendantsIds = getDescendantsIds(state, status.get('id'));
+      ancestorsIds   = getAncestorsIds(state, { id: status.get('in_reply_to_id') });
+      descendantsIds = getDescendantsIds(state, { id: status.get('id') });
+      referenceIds   = getReferenceIds(state, { id: status.get('id') }).filter((id) => id !== status.get('quote_id'));
     }
 
     return {
@@ -98,6 +164,7 @@ const makeMapStateToProps = () => {
       status,
       ancestorsIds,
       descendantsIds,
+      referenceIds,
       askReplyConfirmation: state.getIn(['compose', 'text']).trim().length !== 0,
       domain: state.getIn(['meta', 'domain']),
       pictureInPicture: getPictureInPicture(state, { id: props.params.statusId }),
@@ -133,8 +200,9 @@ class Status extends ImmutablePureComponent {
     dispatch: PropTypes.func.isRequired,
     status: ImmutablePropTypes.map,
     isLoading: PropTypes.bool,
-    ancestorsIds: PropTypes.arrayOf(PropTypes.string).isRequired,
-    descendantsIds: PropTypes.arrayOf(PropTypes.string).isRequired,
+    ancestorsIds: ImmutablePropTypes.list.isRequired,
+    descendantsIds: ImmutablePropTypes.list.isRequired,
+    referenceIds: ImmutablePropTypes.list.isRequired,
     intl: PropTypes.object.isRequired,
     askReplyConfirmation: PropTypes.bool,
     multiColumn: PropTypes.bool,
@@ -194,6 +262,29 @@ class Status extends ImmutablePureComponent {
     }
   };
 
+  handleEmojiReact = (status, emoji) => {
+    const { dispatch } = this.props;
+    const { signedIn } = this.props.identity;
+
+    if (signedIn) {
+      dispatch(emojiReact(status, emoji));
+    } else {
+      dispatch(openModal({
+        modalType: 'INTERACTION',
+        modalProps: {
+          type: 'favourite',
+          accountId: status.getIn(['account', 'id']),
+          url: status.get('uri'),
+        },
+      }));
+    }
+  };
+
+  handleUnEmojiReact = (status, emoji) => {
+    const { dispatch } = this.props;
+    dispatch(unEmojiReact(status, emoji));
+  };
+
   handlePin = (status) => {
     if (status.get('pinned')) {
       this.props.dispatch(unpin(status));
@@ -224,12 +315,12 @@ class Status extends ImmutablePureComponent {
     }
   };
 
-  handleReblogClick = (status, e) => {
+  handleReblogClick = (status, e, force = false) => {
     const { dispatch } = this.props;
     const { signedIn } = this.props.identity;
 
     if (signedIn) {
-      dispatch(toggleReblog(status.get('id'), e && e.shiftKey));
+      dispatch(toggleReblog(status.get('id'), e && e.shiftKey, force));
     } else {
       dispatch(openModal({
         modalType: 'INTERACTION',
@@ -242,12 +333,38 @@ class Status extends ImmutablePureComponent {
     }
   };
 
+  handleReblogForceModalClick = (status, e) => {
+    this.handleReblogClick(status, e, true);
+  };
+
+  handleReference = (status, router) => {
+    this.props.dispatch(insertReferenceCompose(0, status.get('url'), 'BT', router));
+  };
+
+  handleQuote = (status, router) => {
+    this.props.dispatch(insertReferenceCompose(0, status.get('url'), 'QT', router));
+  };
+
   handleBookmarkClick = (status) => {
+    if (bookmarkCategoryNeeded) {
+      this.handleBookmarkCategoryAdderClick(status);
+      return;
+    }
+    
     if (status.get('bookmarked')) {
       this.props.dispatch(unbookmark(status));
     } else {
       this.props.dispatch(bookmark(status));
     }
+  };
+
+  handleBookmarkCategoryAdderClick = (status) => {
+    this.props.dispatch(openModal({
+      modalType: 'BOOKMARK_CATEGORY_ADDER',
+      modalProps: {
+        statusId: status.get('id'),
+      },
+    }));
   };
 
   handleDeleteClick = (status, withRedraft = false) => {
@@ -327,8 +444,8 @@ class Status extends ImmutablePureComponent {
   };
 
   handleToggleAll = () => {
-    const { status, ancestorsIds, descendantsIds } = this.props;
-    const statusIds = [status.get('id')].concat(ancestorsIds, descendantsIds);
+    const { status, ancestorsIds, descendantsIds, referenceIds } = this.props;
+    const statusIds = [status.get('id')].concat(ancestorsIds.toJS(), descendantsIds.toJS(), referenceIds.toJS());
 
     if (status.get('hidden')) {
       this.props.dispatch(revealStatus(statusIds));
@@ -424,35 +541,45 @@ class Status extends ImmutablePureComponent {
   };
 
   handleMoveUp = id => {
-    const { status, ancestorsIds, descendantsIds } = this.props;
+    const { status, ancestorsIds, descendantsIds, referenceIds } = this.props;
 
     if (id === status.get('id')) {
-      this._selectChild(ancestorsIds.length - 1, true);
+      this._selectChild(ancestorsIds.size + referenceIds.size - 1, true);
     } else {
       let index = ancestorsIds.indexOf(id);
 
       if (index === -1) {
         index = descendantsIds.indexOf(id);
-        this._selectChild(ancestorsIds.length + index, true);
+        if (index === -1) {
+          index = referenceIds.indexOf(id);
+          this._selectChild(index - 1, true);
+        } else {
+          this._selectChild(ancestorsIds.size + referenceIds.size + index, true);
+        }
       } else {
-        this._selectChild(index - 1, true);
+        this._selectChild(referenceIds.size + index - 1, true);
       }
     }
   };
 
   handleMoveDown = id => {
-    const { status, ancestorsIds, descendantsIds } = this.props;
+    const { status, ancestorsIds, descendantsIds, referenceIds } = this.props;
 
     if (id === status.get('id')) {
-      this._selectChild(ancestorsIds.length + 1, false);
+      this._selectChild(ancestorsIds.size + referenceIds.size + 1, false);
     } else {
       let index = ancestorsIds.indexOf(id);
 
       if (index === -1) {
         index = descendantsIds.indexOf(id);
-        this._selectChild(ancestorsIds.length + index + 2, false);
+        if (index === -1) {
+          index = referenceIds.indexOf(id);
+          this._selectChild(index + 1, false);
+        } else {
+          this._selectChild(ancestorsIds.size + referenceIds.size + index + 2, false);
+        }
       } else {
-        this._selectChild(index + 1, false);
+        this._selectChild(referenceIds.size + index + 1, false);
       }
     }
   };
@@ -475,14 +602,14 @@ class Status extends ImmutablePureComponent {
     const { params: { statusId } } = this.props;
 
     return list.map((id, i) => (
-      <StatusQuoteManager
+      <StatusContainer
         key={id}
         id={id}
         onMoveUp={this.handleMoveUp}
         onMoveDown={this.handleMoveDown}
         contextType='thread'
-        previousId={i > 0 ? list[i - 1] : undefined}
-        nextId={list[i + 1] || (ancestors && statusId)}
+        previousId={i > 0 ? list.get(i - 1) : undefined}
+        nextId={list.get(i + 1) || (ancestors && statusId)}
         rootId={statusId}
       />
     ));
@@ -517,9 +644,9 @@ class Status extends ImmutablePureComponent {
   }
 
   componentDidUpdate (prevProps) {
-    const { status, ancestorsIds } = this.props;
+    const { status, ancestorsIds, referenceIds } = this.props;
 
-    if (status && (ancestorsIds.length > prevProps.ancestorsIds.length || prevProps.status?.get('id') !== status.get('id'))) {
+    if (status && (ancestorsIds.size + referenceIds.size > prevProps.ancestorsIds.size + prevProps.referenceIds.size || prevProps.status?.get('id') !== status.get('id'))) {
       this._scrollStatusIntoView();
     }
   }
@@ -548,8 +675,8 @@ class Status extends ImmutablePureComponent {
   };
 
   render () {
-    let ancestors, descendants, remoteHint;
-    const { isLoading, status, ancestorsIds, descendantsIds, intl, domain, multiColumn, pictureInPicture } = this.props;
+    let ancestors, descendants, references, remoteHint;
+    const { isLoading, status, ancestorsIds, descendantsIds, referenceIds, intl, domain, multiColumn, pictureInPicture } = this.props;
     const { fullscreen } = this.state;
 
     if (isLoading) {
@@ -566,11 +693,15 @@ class Status extends ImmutablePureComponent {
       );
     }
 
-    if (ancestorsIds && ancestorsIds.length > 0) {
+    if (referenceIds && referenceIds.size > 0) {
+      references = <>{this.renderChildren(referenceIds, true)}</>;
+    }
+
+    if (ancestorsIds && ancestorsIds.size > 0) {
       ancestors = <>{this.renderChildren(ancestorsIds, true)}</>;
     }
 
-    if (descendantsIds && descendantsIds.length > 0) {
+    if (descendantsIds && descendantsIds.size > 0) {
       descendants = <>{this.renderChildren(descendantsIds)}</>;
     }
 
@@ -614,6 +745,7 @@ class Status extends ImmutablePureComponent {
 
         <ScrollContainer scrollKey='thread' shouldUpdateScroll={this.shouldUpdateScroll}>
           <div className={classNames('scrollable', { fullscreen })} ref={this.setContainerRef}>
+            {references}
             {ancestors}
 
             <HotKeys handlers={handlers}>
@@ -629,6 +761,8 @@ class Status extends ImmutablePureComponent {
                   showMedia={this.state.showMedia}
                   onToggleMediaVisibility={this.handleToggleMediaVisibility}
                   pictureInPicture={pictureInPicture}
+                  onEmojiReact={this.handleEmojiReact}
+                  onUnEmojiReact={this.handleUnEmojiReact}
                 />
 
                 <ActionBar
@@ -636,8 +770,13 @@ class Status extends ImmutablePureComponent {
                   status={status}
                   onReply={this.handleReplyClick}
                   onFavourite={this.handleFavouriteClick}
+                  onEmojiReact={this.handleEmojiReact}
                   onReblog={this.handleReblogClick}
+                  onReblogForceModal={this.handleReblogForceModalClick}
+                  onReference={this.handleReference}
+                  onQuote={this.handleQuote}
                   onBookmark={this.handleBookmarkClick}
+                  onBookmarkCategoryAdder={this.handleBookmarkCategoryAdderClick}
                   onDelete={this.handleDeleteClick}
                   onEdit={this.handleEditClick}
                   onDirect={this.handleDirectClick}

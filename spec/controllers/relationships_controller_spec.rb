@@ -35,7 +35,7 @@ RSpec.describe RelationshipsController do
   describe 'PATCH #update' do
     let(:alice) { Fabricate(:account, username: 'alice', domain: 'example.com') }
 
-    shared_examples 'general behavior for followed user' do
+    shared_examples 'redirects back to followers page' do
       it 'redirects back to followers page' do
         alice.follow!(user.account)
 
@@ -49,7 +49,7 @@ RSpec.describe RelationshipsController do
     context 'when select parameter is not provided' do
       subject { patch :update }
 
-      it_behaves_like 'general behavior for followed user'
+      include_examples 'redirects back to followers page'
     end
 
     context 'when select parameter is provided' do
@@ -83,7 +83,7 @@ RSpec.describe RelationshipsController do
         end
       end
 
-      it_behaves_like 'general behavior for followed user'
+      include_examples 'redirects back to followers page'
     end
   end
 end

@@ -53,7 +53,7 @@ WebMock.disable_net_connect!(
   allow_localhost: true,
   allow: Chewy.settings[:host]
 )
-Sidekiq.default_configuration.logger = nil
+Sidekiq.logger = nil
 
 DatabaseCleaner.strategy = [:deletion]
 

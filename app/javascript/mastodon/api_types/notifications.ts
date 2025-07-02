@@ -3,6 +3,7 @@
 import type { AccountWarningAction } from 'mastodon/models/notification_group';
 
 import type { ApiAccountJSON } from './accounts';
+import type { ApiListJSON } from './lists';
 import type { ApiReportJSON } from './reports';
 import type { ApiStatusJSON } from './statuses';
 
@@ -11,10 +12,13 @@ export const allNotificationTypes = [
   'follow',
   'follow_request',
   'favourite',
+  'emoji_reaction',
   'reblog',
   'mention',
+  'status_reference',
   'poll',
   'status',
+  'list_status',
   'update',
   'admin.sign_up',
   'admin.report',
@@ -25,9 +29,12 @@ export const allNotificationTypes = [
 
 export type NotificationWithStatusType =
   | 'favourite'
+  | 'emoji_reaction'
   | 'reblog'
   | 'status'
+  | 'list_status'
   | 'mention'
+  | 'status_reference'
   | 'poll'
   | 'update';
 
@@ -41,12 +48,30 @@ export type NotificationType =
   | 'admin.report'
   | 'annual_report';
 
+export interface NotifyEmojiReactionJSON {
+  name: string;
+  count: number;
+  me: boolean;
+  url?: string;
+  static_url?: string;
+  domain?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface NotificationEmojiReactionGroupJSON {
+  emoji_reaction: NotifyEmojiReactionJSON;
+  sample_account_ids: string[];
+}
+
 export interface BaseNotificationJSON {
   id: string;
   type: NotificationType;
   created_at: string;
   group_key: string;
   account: ApiAccountJSON;
+  emoji_reaction?: NotifyEmojiReactionJSON;
+  list?: ApiListJSON;
 }
 
 export interface BaseNotificationGroupJSON {
@@ -58,6 +83,8 @@ export interface BaseNotificationGroupJSON {
   most_recent_notification_id: string;
   page_min_id?: string;
   page_max_id?: string;
+  emoji_reaction_groups?: NotificationEmojiReactionGroupJSON[];
+  list?: ApiListJSON;
 }
 
 interface NotificationGroupWithStatusJSON extends BaseNotificationGroupJSON {
@@ -68,6 +95,7 @@ interface NotificationGroupWithStatusJSON extends BaseNotificationGroupJSON {
 interface NotificationWithStatusJSON extends BaseNotificationJSON {
   type: NotificationWithStatusType;
   status: ApiStatusJSON | null;
+  emoji_reaction?: NotifyEmojiReactionJSON;
 }
 
 interface ReportNotificationGroupJSON extends BaseNotificationGroupJSON {

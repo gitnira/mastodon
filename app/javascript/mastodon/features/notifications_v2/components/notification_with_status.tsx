@@ -12,7 +12,7 @@ import {
 } from 'mastodon/actions/statuses';
 import type { IconProp } from 'mastodon/components/icon';
 import { Icon } from 'mastodon/components/icon';
-import { StatusQuoteManager } from 'mastodon/components/status_quoted';
+import Status from 'mastodon/containers/status_container';
 import { getStatusHidden } from 'mastodon/selectors/filters';
 import { useAppSelector, useAppDispatch } from 'mastodon/store';
 
@@ -28,6 +28,7 @@ export const NotificationWithStatus: React.FC<{
   count: number;
   labelRenderer: LabelRenderer;
   unread: boolean;
+  muted?: boolean;
 }> = ({
   icon,
   iconId,
@@ -37,6 +38,7 @@ export const NotificationWithStatus: React.FC<{
   labelRenderer,
   type,
   unread,
+  muted,
 }) => {
   const dispatch = useAppDispatch();
 
@@ -102,13 +104,16 @@ export const NotificationWithStatus: React.FC<{
           {label}
         </div>
 
-        <StatusQuoteManager
+        <Status
+          // @ts-expect-error -- <Status> is not yet typed
           id={statusId}
           contextType='notifications'
           withDismiss
           skipPrepend
           avatarSize={40}
           unfocusable
+          muted={muted}
+          withoutEmojiReactions
         />
       </div>
     </HotKeys>

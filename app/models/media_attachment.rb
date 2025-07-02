@@ -8,7 +8,6 @@
 #  status_id                   :bigint(8)
 #  file_file_name              :string
 #  file_content_type           :string
-#  file_file_size              :integer
 #  file_updated_at             :datetime
 #  remote_url                  :string           default(""), not null
 #  created_at                  :datetime         not null
@@ -24,15 +23,17 @@
 #  file_storage_schema_version :integer
 #  thumbnail_file_name         :string
 #  thumbnail_content_type      :string
-#  thumbnail_file_size         :integer
 #  thumbnail_updated_at        :datetime
 #  thumbnail_remote_url        :string
+#  file_file_size              :integer
+#  thumbnail_file_size         :integer
 #
 
 class MediaAttachment < ApplicationRecord
   self.inheritance_column = nil
 
   include Attachmentable
+  include RoutingHelper
 
   enum :type, { image: 0, gifv: 1, video: 2, unknown: 3, audio: 4 }
   enum :processing, { queued: 0, in_progress: 1, complete: 2, failed: 3 }, prefix: true
@@ -122,7 +123,6 @@ class MediaAttachment < ApplicationRecord
         output: {
           'loglevel' => 'fatal',
           'map_metadata' => '-1',
-          'movflags' => 'faststart', # Move metadata to start of file so playback can begin before download finishes
           'c:v' => 'copy',
           'c:a' => 'copy',
         }.freeze,
@@ -228,10 +228,6 @@ class MediaAttachment < ApplicationRecord
     file.blank? && remote_url.present?
   end
 
-  def discarded?
-    status&.discarded? || (status_id.present? && status.nil?)
-  end
-
   def significantly_changed?
     description_previously_changed? || thumbnail_updated_at_previously_changed? || file_meta_previously_changed?
   end
@@ -276,6 +272,10 @@ class MediaAttachment < ApplicationRecord
 
   def delay_processing_for_attachment?(attachment_name)
     delay_processing? && attachment_name == :file
+  end
+
+  def url
+    full_asset_url(file.url(:original))
   end
 
   before_create :set_unknown_type
@@ -421,7 +421,7 @@ class MediaAttachment < ApplicationRecord
 
   # Record the cache keys to burst before the file get actually deleted
   def prepare_cache_bust!
-    return unless Rails.configuration.x.cache_buster.enabled
+    return unless Rails.configuration.x.cache_buster_enabled
 
     @paths_to_cache_bust = MediaAttachment.attachment_definitions.keys.flat_map do |attachment_name|
       attachment = public_send(attachment_name)
@@ -438,7 +438,7 @@ class MediaAttachment < ApplicationRecord
   # Once Paperclip has deleted the files, we can't recover the cache keys,
   # so use the previously-saved ones
   def bust_cache!
-    return unless Rails.configuration.x.cache_buster.enabled
+    return unless Rails.configuration.x.cache_buster_enabled
 
     CacheBusterWorker.push_bulk(@paths_to_cache_bust) { |path| [path] }
   rescue => e

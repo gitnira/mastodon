@@ -19,9 +19,10 @@ class Instance < ApplicationRecord
     belongs_to :domain_block
     belongs_to :domain_allow
     belongs_to :unavailable_domain
+    belongs_to :instance_info
+    belongs_to :friend_domain
 
     has_many :accounts, dependent: nil
-    has_many :moderation_notes, class_name: 'InstanceModerationNote', dependent: :destroy
   end
 
   scope :searchable, -> { where.not(domain: DomainBlock.select(:domain)) }

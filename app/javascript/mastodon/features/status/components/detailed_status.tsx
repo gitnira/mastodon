@@ -13,24 +13,28 @@ import { Link } from 'react-router-dom';
 
 import AlternateEmailIcon from '@/material-icons/400-24px/alternate_email.svg?react';
 import { AnimatedNumber } from 'mastodon/components/animated_number';
-import { Avatar } from 'mastodon/components/avatar';
 import { ContentWarning } from 'mastodon/components/content_warning';
-import { DisplayName } from 'mastodon/components/display_name';
-import { EditedTimestamp } from 'mastodon/components/edited_timestamp';
+import EditedTimestamp from 'mastodon/components/edited_timestamp';
 import { FilterWarning } from 'mastodon/components/filter_warning';
 import { FormattedDateWrapper } from 'mastodon/components/formatted_date';
 import type { StatusLike } from 'mastodon/components/hashtag_bar';
 import { getHashtagBarForStatus } from 'mastodon/components/hashtag_bar';
 import { Icon } from 'mastodon/components/icon';
 import { IconLogo } from 'mastodon/components/logo';
-import MediaGallery from 'mastodon/components/media_gallery';
-import { PictureInPicturePlaceholder } from 'mastodon/components/picture_in_picture_placeholder';
-import StatusContent from 'mastodon/components/status_content';
-import { QuotedStatus } from 'mastodon/components/status_quoted';
+import PictureInPicturePlaceholder from 'mastodon/components/picture_in_picture_placeholder';
+import { SearchabilityIcon } from 'mastodon/components/searchability_icon';
 import { VisibilityIcon } from 'mastodon/components/visibility_icon';
-import { Audio } from 'mastodon/features/audio';
-import scheduleIdleTask from 'mastodon/features/ui/util/schedule_idle_task';
 import { Video } from 'mastodon/features/video';
+import { enableEmojiReaction, isHideItem } from 'mastodon/initial_state';
+
+import { Avatar } from '../../../components/avatar';
+import { DisplayName } from '../../../components/display_name';
+import MediaGallery from '../../../components/media_gallery';
+import StatusContent from '../../../components/status_content';
+import StatusEmojiReactionsBar from '../../../components/status_emoji_reactions_bar';
+import CompactedStatusContainer from '../../../containers/compacted_status_container';
+import Audio from '../../audio';
+import scheduleIdleTask from '../../ui/util/schedule_idle_task';
 
 import Card from './card';
 
@@ -54,6 +58,9 @@ export const DetailedStatus: React.FC<{
   pictureInPicture: any;
   onToggleHidden?: (status: any) => void;
   onToggleMediaVisibility?: () => void;
+  onEmojiReact?: (status: any, name: string) => void;
+  onUnEmojiReact?: (status: any, name: string) => void;
+  muted?: boolean;
 }> = ({
   status,
   onOpenMedia,
@@ -68,6 +75,9 @@ export const DetailedStatus: React.FC<{
   pictureInPicture,
   onToggleMediaVisibility,
   onToggleHidden,
+  onEmojiReact,
+  onUnEmojiReact,
+  muted,
 }) => {
   const properStatus = status?.get('reblog') ?? status;
   const [height, setHeight] = useState(0);
@@ -128,6 +138,7 @@ export const DetailedStatus: React.FC<{
   let applicationLink;
   let reblogLink;
   let attachmentAspectRatio;
+  let emojiReactionsLink;
 
   if (properStatus.get('media_attachments').getIn([0, 'type']) === 'video') {
     attachmentAspectRatio = `${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'width'])} / ${properStatus.get('media_attachments').getIn([0, 'meta', 'original', 'height'])}`;
@@ -189,17 +200,18 @@ export const DetailedStatus: React.FC<{
           src={attachment.get('url')}
           alt={description}
           lang={language}
+          duration={attachment.getIn(['meta', 'original', 'duration'], 0)}
           poster={
             attachment.get('preview_url') ||
             status.getIn(['account', 'avatar_static'])
           }
-          duration={attachment.getIn(['meta', 'original', 'duration'], 0)}
           backgroundColor={attachment.getIn(['meta', 'colors', 'background'])}
           foregroundColor={attachment.getIn(['meta', 'colors', 'foreground'])}
           accentColor={attachment.getIn(['meta', 'colors', 'accent'])}
           sensitive={status.get('sensitive')}
           visible={showMedia}
           blurhash={attachment.get('blurhash')}
+          height={150}
           onToggleVisibility={onToggleMediaVisibility}
           matchedFilters={status.get('matched_media_filters')}
         />
@@ -227,14 +239,36 @@ export const DetailedStatus: React.FC<{
         />
       );
     }
-  } else if (status.get('card') && !status.get('quote')) {
+  } else if (status.get('card')) {
     media = (
       <Card
-        sensitive={status.get('sensitive')}
+        sensitive={status.get('sensitive') && !status.get('spoiler_text')}
         onOpenMedia={onOpenMedia}
         card={status.get('card')}
       />
     );
+  }
+
+  let emojiReactionsBar = null;
+  const emojiReactionAvailableServer =
+    !isHideItem('emoji_reaction_unavailable_server') ||
+    status.getIn(['account', 'server_features', 'emoji_reaction']);
+  if (status.get('emoji_reactions')) {
+    const emojiReactions = status.get('emoji_reactions');
+    if (
+      emojiReactions.size > 0 &&
+      enableEmojiReaction &&
+      emojiReactionAvailableServer
+    ) {
+      emojiReactionsBar = (
+        <StatusEmojiReactionsBar
+          emojiReactions={emojiReactions}
+          status={status}
+          onEmojiReact={onEmojiReact}
+          onUnEmojiReact={onUnEmojiReact}
+        />
+      );
+    }
   }
 
   if (status.get('application')) {
@@ -255,8 +289,52 @@ export const DetailedStatus: React.FC<{
 
   const visibilityLink = (
     <>
-      ·<VisibilityIcon visibility={status.get('visibility')} />
+      ·
+      <VisibilityIcon
+        visibility={status.get('limited_scope') || status.get('visibility_ex')}
+      />
     </>
+  );
+  const searchabilityLink = (
+    <>
+      ·<SearchabilityIcon searchability={status.get('searchability')} />
+    </>
+  );
+
+  if (!enableEmojiReaction || !emojiReactionAvailableServer) {
+    emojiReactionsLink = '';
+  } else {
+    emojiReactionsLink = (
+      <Link
+        to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}/emoji_reactions`}
+        className='detailed-status__link'
+      >
+        <span className='detailed-status__favorites'>
+          <AnimatedNumber value={status.get('emoji_reactions_count')} />
+        </span>
+        <FormattedMessage
+          id='status.emoji_reactions'
+          defaultMessage='{count, plural, one {favorite} other {favorites}}'
+          values={{ count: status.get('emoji_reactions_count') }}
+        />
+      </Link>
+    );
+  }
+
+  const statusReferencesLink = (
+    <Link
+      to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}/references`}
+      className='detailed-status__link'
+    >
+      <span className='detailed-status__reblogs'>
+        <AnimatedNumber value={status.get('status_referred_by_count')} />
+      </span>
+      <FormattedMessage
+        id='status.quotes'
+        defaultMessage='{count, plural, one {boost} other {boosts}}'
+        values={{ count: status.get('status_referred_by_count') }}
+      />
+    </Link>
   );
 
   if (['private', 'direct'].includes(status.get('visibility') as string)) {
@@ -305,15 +383,17 @@ export const DetailedStatus: React.FC<{
     (!matchedFilters || showDespiteFilter) &&
     (!status.get('hidden') || status.get('spoiler_text').length === 0);
 
+  const quote = !muted && status.get('quote_id') && (
+    <>
+      {/* @ts-expect-error: CompactedStatusContainer class is not typescript still. */}
+      <CompactedStatusContainer id={status.get('quote_id')} history={history} />
+    </>
+  );
+
   return (
     <div style={outerStyle}>
-      <div
-        ref={handleRef}
-        className={classNames('detailed-status', {
-          'status--has-quote': !!status.get('quote'),
-        })}
-      >
-        {status.get('visibility') === 'direct' && (
+      <div ref={handleRef} className={classNames('detailed-status')}>
+        {status.get('visibility_ex') === 'direct' && (
           <div className='status__prepend'>
             <div className='status__prepend-icon-wrapper'>
               <Icon
@@ -379,10 +459,8 @@ export const DetailedStatus: React.FC<{
 
             {media}
             {hashtagBar}
-
-            {status.get('quote') && (
-              <QuotedStatus quote={status.get('quote')} />
-            )}
+            {quote}
+            {emojiReactionsBar}
           </>
         )}
 
@@ -405,6 +483,7 @@ export const DetailedStatus: React.FC<{
             </a>
 
             {visibilityLink}
+            {searchabilityLink}
             {applicationLink}
           </div>
 
@@ -420,7 +499,7 @@ export const DetailedStatus: React.FC<{
           <div className='detailed-status__meta__line'>
             {reblogLink}
             {reblogLink && <>·</>}
-            {favouriteLink}
+            {favouriteLink}·{emojiReactionsLink}·{statusReferencesLink}
           </div>
         </div>
       </div>

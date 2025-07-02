@@ -17,7 +17,7 @@ import { initReport } from 'mastodon/actions/reports';
 import { Avatar } from 'mastodon/components/avatar';
 import { CheckBox } from 'mastodon/components/check_box';
 import { IconButton } from 'mastodon/components/icon_button';
-import { Dropdown } from 'mastodon/components/dropdown_menu';
+import DropdownMenuContainer from 'mastodon/containers/dropdown_menu_container';
 import { makeGetAccount } from 'mastodon/selectors';
 import { toCappedNumber } from 'mastodon/utils/numbers';
 
@@ -105,10 +105,11 @@ export const NotificationRequest = ({ id, accountId, notificationsCount, checked
 
       <div className='notification-request__actions'>
         <IconButton iconComponent={DeleteIcon} onClick={handleDismiss} title={intl.formatMessage(messages.dismiss)} />
-        <Dropdown
+        <DropdownMenuContainer
           items={menu}
-          icon='ellipsis-h'
+          icons='ellipsis-h'
           iconComponent={MoreHorizIcon}
+          direction='right'
           title={intl.formatMessage(messages.more)}
         />
       </div>

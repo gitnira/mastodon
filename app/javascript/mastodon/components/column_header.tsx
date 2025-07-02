@@ -9,8 +9,7 @@ import ArrowBackIcon from '@/material-icons/400-24px/arrow_back.svg?react';
 import ChevronLeftIcon from '@/material-icons/400-24px/chevron_left.svg?react';
 import ChevronRightIcon from '@/material-icons/400-24px/chevron_right.svg?react';
 import CloseIcon from '@/material-icons/400-24px/close.svg?react';
-import UnfoldLessIcon from '@/material-icons/400-24px/unfold_less.svg?react';
-import UnfoldMoreIcon from '@/material-icons/400-24px/unfold_more.svg?react';
+import SettingsIcon from '@/material-icons/400-24px/settings.svg?react';
 import type { IconProp } from 'mastodon/components/icon';
 import { Icon } from 'mastodon/components/icon';
 import { ButtonInTabsBar } from 'mastodon/features/ui/util/columns_context';
@@ -18,7 +17,7 @@ import { useIdentity } from 'mastodon/identity_context';
 
 import { useAppHistory } from './router';
 
-export const messages = defineMessages({
+const messages = defineMessages({
   show: { id: 'column_header.show_settings', defaultMessage: 'Show settings' },
   hide: { id: 'column_header.hide_settings', defaultMessage: 'Hide settings' },
   moveLeft: {
@@ -239,10 +238,7 @@ export const ColumnHeader: React.FC<Props> = ({
         onClick={handleToggleClick}
       >
         <i className='icon-with-badge'>
-          <Icon
-            id='sliders'
-            icon={collapsed ? UnfoldMoreIcon : UnfoldLessIcon}
-          />
+          <Icon id='sliders' icon={SettingsIcon} />
           {collapseIssues && <i className='icon-with-badge__issue-badge' />}
         </i>
       </button>

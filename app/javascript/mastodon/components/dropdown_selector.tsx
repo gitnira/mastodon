@@ -17,8 +17,9 @@ export interface SelectItem {
   value: string;
   icon?: string;
   iconComponent?: IconProp;
+  extraIconComponent?: IconProp;
   text: string;
-  meta?: string;
+  meta: string;
   extra?: string;
 }
 
@@ -175,7 +176,10 @@ export const DropdownSelector: React.FC<Props> = ({
               className={`${classNamePrefix}__option__additional`}
               title={item.extra}
             >
-              <Icon id='info-circle' icon={InfoIcon} />
+              <Icon
+                id='info-circle'
+                icon={item.extraIconComponent ?? InfoIcon}
+              />
             </div>
           )}
         </li>

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 class Api::BaseController < ApplicationController
-  DEFAULT_STATUSES_LIMIT = 20
-  DEFAULT_ACCOUNTS_LIMIT = 40
+  DEFAULT_STATUSES_LIMIT       = 20
+  DEFAULT_ACCOUNTS_LIMIT       = 40
 
   include Api::RateLimitHeaders
   include Api::AccessTokenTrackingConcern
@@ -50,10 +50,6 @@ class Api::BaseController < ApplicationController
     nil
   end
 
-  def require_client_credentials!
-    render json: { error: 'This method requires an client credentials authentication' }, status: 403 if doorkeeper_token.resource_owner_id.present?
-  end
-
   def require_authenticated_user!
     render json: { error: 'This method requires an authenticated user' }, status: 401 unless current_user
   end
@@ -92,7 +88,7 @@ class Api::BaseController < ApplicationController
   end
 
   def disallow_unauthenticated_api_access?
-    ENV['DISALLOW_UNAUTHENTICATED_API_ACCESS'] == 'true' || Rails.configuration.x.mastodon.limited_federation_mode
+    ENV['DISALLOW_UNAUTHENTICATED_API_ACCESS'] == 'true' || Rails.configuration.x.limited_federation_mode
   end
 
   private

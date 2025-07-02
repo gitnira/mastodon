@@ -8,7 +8,7 @@ class Admin::SystemCheck::SidekiqProcessCheck < Admin::SystemCheck::BaseCheck
     pull
     scheduler
     ingress
-    fasp
+    perishable
   ).freeze
 
   def skip?

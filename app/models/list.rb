@@ -5,12 +5,14 @@
 # Table name: lists
 #
 #  id             :bigint(8)        not null, primary key
-#  account_id     :bigint(8)        not null
+#  exclusive      :boolean          default(FALSE), not null
+#  favourite      :boolean          default(TRUE), not null
+#  notify         :boolean          default(FALSE), not null
+#  replies_policy :integer          default("list"), not null
 #  title          :string           default(""), not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
-#  replies_policy :integer          default("list"), not null
-#  exclusive      :boolean          default(FALSE), not null
+#  account_id     :bigint(8)        not null
 #
 
 class List < ApplicationRecord
@@ -18,19 +20,30 @@ class List < ApplicationRecord
 
   PER_ACCOUNT_LIMIT = 50
 
-  enum :replies_policy, { list: 0, followed: 1, none: 2 }, prefix: :show, validate: true
+  enum :replies_policy, { list: 0, followed: 1, none: 2 }, prefix: :show
 
   belongs_to :account
 
   has_many :list_accounts, inverse_of: :list, dependent: :destroy
   has_many :accounts, through: :list_accounts
   has_many :active_accounts, -> { merge(ListAccount.active) }, through: :list_accounts, source: :account
+  has_many :antennas, inverse_of: :list, dependent: :destroy
+  has_many :list_statuses, inverse_of: :list, dependent: :destroy
+  has_many :statuses, through: :list_statuses
 
   validates :title, presence: true
 
   validate :validate_account_lists_limit, on: :create
 
   before_destroy :clean_feed_manager
+
+  def favourite!
+    update!(favourite: true)
+  end
+
+  def unfavourite!
+    update!(favourite: false)
+  end
 
   private
 

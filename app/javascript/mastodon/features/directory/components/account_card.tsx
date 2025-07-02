@@ -195,14 +195,20 @@ export const AccountCard: React.FC<{ accountId: string }> = ({ accountId }) => {
       <div className='account-card__actions'>
         <div className='account-card__counters'>
           <div className='account-card__counters__item'>
-            <ShortNumber value={account.get('statuses_count')} />
+            <ShortNumber
+              value={account.get('statuses_count')}
+              isHide={account.other_settings.hide_statuses_count}
+            />
             <small>
               <FormattedMessage id='account.posts' defaultMessage='Posts' />
             </small>
           </div>
 
           <div className='account-card__counters__item'>
-            <ShortNumber value={account.get('followers_count')} />{' '}
+            <ShortNumber
+              value={account.get('followers_count')}
+              isHide={account.other_settings.hide_followers_count}
+            />{' '}
             <small>
               <FormattedMessage
                 id='account.followers'
@@ -212,7 +218,10 @@ export const AccountCard: React.FC<{ accountId: string }> = ({ accountId }) => {
           </div>
 
           <div className='account-card__counters__item'>
-            <ShortNumber value={account.get('following_count')} />{' '}
+            <ShortNumber
+              value={account.get('following_count')}
+              isHide={account.other_settings.hide_following_count}
+            />{' '}
             <small>
               <FormattedMessage
                 id='account.following'

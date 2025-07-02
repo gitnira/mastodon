@@ -3,8 +3,8 @@
 require 'rails_helper'
 
 RSpec.describe Account do
-  it_behaves_like 'Account::Search'
-  it_behaves_like 'Reviewable'
+  include_examples 'Account::Search'
+  include_examples 'Reviewable'
 
   context 'with an account record' do
     subject { Fabricate(:account) }
@@ -254,6 +254,202 @@ RSpec.describe Account do
     end
   end
 
+  describe '#allow_emoji_reaction?' do
+    let(:policy) { :allow }
+    let(:allow_local) { false }
+    let(:reactioned) { Fabricate(:user, settings: { emoji_reaction_policy: policy, slip_local_emoji_reaction: allow_local }).account }
+    let(:followee) { Fabricate(:account) }
+    let(:follower) { Fabricate(:account) }
+    let(:mutual) { Fabricate(:account) }
+    let(:anyone) { Fabricate(:account) }
+
+    before do
+      follower.follow!(reactioned)
+      reactioned.follow!(followee)
+      mutual.follow!(reactioned)
+      reactioned.follow!(mutual)
+    end
+
+    shared_examples 'with policy' do |override_policy, permitted|
+      context "when policy is #{override_policy}" do
+        let(:policy) { override_policy }
+
+        it 'allows anyone' do
+          expect(reactioned.allow_emoji_reaction?(anyone)).to be permitted.include?(:anyone)
+        end
+
+        it 'allows followee' do
+          expect(reactioned.allow_emoji_reaction?(followee)).to be permitted.include?(:following)
+        end
+
+        it 'allows follower' do
+          expect(reactioned.allow_emoji_reaction?(follower)).to be permitted.include?(:followers)
+        end
+
+        it 'allows mutual' do
+          expect(reactioned.allow_emoji_reaction?(mutual)).to be permitted.include?(:mutuals)
+        end
+
+        it 'allows self' do
+          expect(reactioned.allow_emoji_reaction?(reactioned)).to be permitted.include?(:self)
+        end
+      end
+    end
+
+    it_behaves_like 'with policy', :allow, %i(anyone following followers mutuals self)
+    it_behaves_like 'with policy', :outside_only, %i(following followers mutuals self)
+    it_behaves_like 'with policy', :following_only, %i(following mutuals self)
+    it_behaves_like 'with policy', :followers_only, %i(followers mutuals self)
+    it_behaves_like 'with policy', :mutuals_only, %i(mutuals self)
+    it_behaves_like 'with policy', :block, %i()
+
+    shared_examples 'allow local only' do |override_policy|
+      context "when policy is #{override_policy} but allow local only" do
+        let(:policy) { override_policy }
+        let(:allow_local) { true }
+        let(:local) { Fabricate(:user).account }
+        let(:remote) { Fabricate(:account, domain: 'example.com', uri: 'https://example.com/actor') }
+
+        before do
+          local.follow!(remote) if override_policy == :following_only
+        end
+
+        it 'does not allow remote' do
+          expect(reactioned.allow_emoji_reaction?(remote)).to be false
+        end
+
+        it 'allows local' do
+          expect(reactioned.allow_emoji_reaction?(local)).to be true
+        end
+      end
+    end
+
+    it_behaves_like 'allow local only', :following_only
+    it_behaves_like 'allow local only', :block
+
+    context 'when reactioned is remote user' do
+      let(:reactioned) { Fabricate(:account, domain: 'foo.bar', uri: 'https://foo.bar/actor', settings: { emoji_reaction_policy: :following_only }) }
+
+      it 'allows anyone' do
+        expect(reactioned.allow_emoji_reaction?(anyone)).to be false
+      end
+
+      it 'allows followee' do
+        expect(reactioned.allow_emoji_reaction?(followee)).to be true
+      end
+    end
+
+    context 'when reactor is remote user' do
+      let(:anyone) { Fabricate(:account, domain: 'foo.bar', uri: 'https://foo.bar/actor/anyone') }
+      let(:policy) { :following_only }
+
+      it 'allows anyone' do
+        expect(reactioned.allow_emoji_reaction?(anyone)).to be false
+      end
+
+      it 'allows followee' do
+        expect(reactioned.allow_emoji_reaction?(followee)).to be true
+      end
+    end
+
+    context 'when both are remote user' do
+      let(:reactioned) { Fabricate(:account, domain: 'foo.bar', uri: 'https://foo.bar/actor', settings: { emoji_reaction_policy: policy }) }
+      let(:anyone) { Fabricate(:account, domain: 'foo.bar', uri: 'https://foo.bar/actor/anyone') }
+      let(:followee) { Fabricate(:account, domain: 'foo.bar', uri: 'https://foo.bar/actor/followee') }
+
+      it 'allows anyone' do
+        expect(reactioned.allow_emoji_reaction?(anyone)).to be true
+      end
+
+      context 'with blocking' do
+        let(:policy) { :block }
+
+        it 'allows anyone' do
+          expect(reactioned.allow_emoji_reaction?(anyone)).to be true
+        end
+      end
+    end
+  end
+
+  describe '#emoji_reaction_policy' do
+    subject { account.emoji_reaction_policy }
+
+    let(:domains) { 'example.com' }
+    let(:account) { Fabricate(:account, domain: 'example.com', uri: 'https://example.com/actor') }
+
+    before do
+      Form::AdminSettings.new(emoji_reaction_disallow_domains: domains).save
+    end
+
+    it 'blocked if target domain' do
+      expect(subject).to eq :block
+    end
+
+    context 'when other domain' do
+      let(:account) { Fabricate(:account, domain: 'allow.example.com', uri: 'https://allow.example.com/actor') }
+
+      it 'allowed if target domain' do
+        expect(subject).to_not eq :block
+      end
+    end
+  end
+
+  describe '#public_settings_for_local' do
+    subject { account.public_settings_for_local }
+
+    let(:account) { Fabricate(:user, settings: { allow_quote: true, hide_statuses_count: true, emoji_reaction_policy: :followers_only }).account }
+
+    shared_examples 'some settings' do |permitted, emoji_reaction_policy|
+      it 'allow_quote is allowed' do
+        expect(subject['allow_quote']).to be permitted.include?(:allow_quote)
+      end
+
+      it 'hide_statuses_count is allowed' do
+        expect(subject['hide_statuses_count']).to be permitted.include?(:hide_statuses_count)
+      end
+
+      it 'hide_following_count is disallowed' do
+        expect(subject['hide_following_count']).to be permitted.include?(:hide_following_count)
+      end
+
+      it 'emoji_reaction is allowed followers' do
+        expect(subject['emoji_reaction_policy']).to eq emoji_reaction_policy
+      end
+    end
+
+    it_behaves_like 'some settings', %i(allow_quote hide_statuses_count), 'followers_only'
+
+    context 'when default true setting is set false' do
+      let(:account) { Fabricate(:user, settings: { allow_quote: false, hide_statuses_count: true, emoji_reaction_policy: :followers_only }).account }
+
+      it_behaves_like 'some settings', %i(hide_statuses_count), 'followers_only'
+    end
+
+    context 'when remote user' do
+      let(:account) { Fabricate(:account, domain: 'example.com', uri: 'https://example.com/actor', settings: { 'allow_quote' => true, 'hide_statuses_count' => true, 'emoji_reaction_policy' => 'followers_only' }) }
+
+      it_behaves_like 'some settings', %i(allow_quote hide_statuses_count), 'followers_only'
+    end
+
+    context 'when remote user by server other_settings is not supported' do
+      let(:account) { Fabricate(:account, domain: 'example.com', uri: 'https://example.com/actor') }
+
+      it_behaves_like 'some settings', %i(allow_quote), 'allow'
+    end
+  end
+
+  describe '#approve_remote!' do
+    it 'calls worker' do
+      account = Fabricate(:account, suspended_at: Time.now.utc, suspension_origin: :local, remote_pending: true)
+      allow(ActivateRemoteAccountWorker).to receive(:perform_async)
+
+      account.approve_remote!
+      expect(account.remote_pending).to be false
+      expect(account.suspended?).to be false
+      expect(ActivateRemoteAccountWorker).to have_received(:perform_async).with(account.id)
+    end
+  end
+
   describe '#favourited?' do
     subject { Fabricate(:account) }
 
@@ -383,6 +579,36 @@ RSpec.describe Account do
       expect(clean_status.association(:account).loaded?).to be false
       clean_status.destroy
       expect(subject.reload.statuses_count).to eq 0
+    end
+  end
+
+  describe '.following_map' do
+    it 'returns an hash' do
+      expect(described_class.following_map([], 1)).to be_a Hash
+    end
+  end
+
+  describe '.followed_by_map' do
+    it 'returns an hash' do
+      expect(described_class.followed_by_map([], 1)).to be_a Hash
+    end
+  end
+
+  describe '.blocking_map' do
+    it 'returns an hash' do
+      expect(described_class.blocking_map([], 1)).to be_a Hash
+    end
+  end
+
+  describe '.requested_map' do
+    it 'returns an hash' do
+      expect(described_class.requested_map([], 1)).to be_a Hash
+    end
+  end
+
+  describe '.requested_by_map' do
+    it 'returns an hash' do
+      expect(described_class.requested_by_map([], 1)).to be_a Hash
     end
   end
 
@@ -776,8 +1002,8 @@ RSpec.describe Account do
     end
   end
 
-  it_behaves_like 'AccountAvatar', :account
-  it_behaves_like 'AccountHeader', :account
+  include_examples 'AccountAvatar', :account
+  include_examples 'AccountHeader', :account
 
   describe '#increment_count!' do
     subject { Fabricate(:account) }

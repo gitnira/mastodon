@@ -35,11 +35,8 @@ import { VerifiedBadge } from 'mastodon/components/verified_badge';
 import { me } from 'mastodon/initial_state';
 import { useAppDispatch, useAppSelector } from 'mastodon/store';
 
-export const messages = defineMessages({
-  manageMembers: {
-    id: 'column.list_members',
-    defaultMessage: 'Manage list members',
-  },
+const messages = defineMessages({
+  heading: { id: 'column.list_members', defaultMessage: 'Manage list members' },
   placeholder: {
     id: 'lists.search',
     defaultMessage: 'Search',
@@ -132,6 +129,7 @@ const AccountItem: React.FC<{
               <ShortNumber
                 value={account.followers_count}
                 renderer={FollowersCounter}
+                isHide={account.other_settings.hide_followers_count}
               />{' '}
               {firstVerifiedField && (
                 <VerifiedBadge link={firstVerifiedField.value} />
@@ -258,10 +256,10 @@ const ListMembers: React.FC<{
   return (
     <Column
       bindToDocument={!multiColumn}
-      label={intl.formatMessage(messages.manageMembers)}
+      label={intl.formatMessage(messages.heading)}
     >
       <ColumnHeader
-        title={intl.formatMessage(messages.manageMembers)}
+        title={intl.formatMessage(messages.heading)}
         icon='list-ul'
         iconComponent={ListAltIcon}
         multiColumn={multiColumn}
@@ -334,7 +332,7 @@ const ListMembers: React.FC<{
       </ScrollableList>
 
       <Helmet>
-        <title>{intl.formatMessage(messages.manageMembers)}</title>
+        <title>{intl.formatMessage(messages.heading)}</title>
         <meta name='robots' content='noindex' />
       </Helmet>
     </Column>

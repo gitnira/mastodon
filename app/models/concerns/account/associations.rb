@@ -12,16 +12,22 @@ module Account::Associations
         has_many :account_pins
         has_many :account_warnings
         has_many :aliases, class_name: 'AccountAlias'
+        has_many :antenna_accounts
+        has_many :antennas
         has_many :bookmarks
+        has_many :bookmark_categories
+        has_many :circle_accounts
+        has_many :circles
         has_many :conversations, class_name: 'AccountConversation'
         has_many :custom_filters
+        has_many :emoji_reactions
         has_many :favourites
         has_many :featured_tags, -> { includes(:tag) }
         has_many :list_accounts
-        has_many :instance_moderation_notes
         has_many :media_attachments
         has_many :mentions
         has_many :migrations, class_name: 'AccountMigration'
+        has_many :ng_rule_histories
         has_many :notification_permissions
         has_many :notification_requests
         has_many :notifications
@@ -30,6 +36,7 @@ module Account::Associations
         has_many :report_notes
         has_many :reports
         has_many :scheduled_statuses
+        has_many :scheduled_expiration_statuses
         has_many :status_pins
         has_many :statuses
 
@@ -54,8 +61,17 @@ module Account::Associations
     # Account records endorsed (pinned) by the account
     has_many :endorsed_accounts, through: :account_pins, class_name: 'Account', source: :target_account
 
+    # Remote pendings
+    has_many :pending_follow_requests, dependent: :destroy
+    has_many :pending_statuses, dependent: :destroy
+    has_many :fetchable_pending_statuses, class_name: 'PendingStatus', foreign_key: :fetch_account_id, dependent: :destroy, inverse_of: :fetch_account
+
     # List records the account has been added to (not owned by the account)
     has_many :lists, through: :list_accounts
+
+    # Account list items
+    has_many :joined_antennas, class_name: 'Antenna', through: :antenna_accounts, source: :antenna
+    has_many :joined_circles, class_name: 'Circle', through: :circle_accounts, source: :circle
 
     # Account record where account has been migrated
     belongs_to :moved_to_account, class_name: 'Account', optional: true

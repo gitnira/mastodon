@@ -11,6 +11,7 @@ import {
   replyCompose,
   mentionCompose,
   directCompose,
+  insertReferenceCompose,
 } from '../actions/compose';
 import {
   initDomainBlockModal,
@@ -20,6 +21,8 @@ import {
   initAddFilter,
 } from '../actions/filters';
 import {
+  emojiReact,
+  unEmojiReact,
   toggleReblog,
   toggleFavourite,
   bookmark,
@@ -60,6 +63,8 @@ const makeMapStateToProps = () => {
 
 const mapDispatchToProps = (dispatch, { contextType }) => ({
 
+  contextType,
+
   onReply (status) {
     dispatch((_, getState) => {
       let state = getState();
@@ -73,11 +78,23 @@ const mapDispatchToProps = (dispatch, { contextType }) => ({
   },
 
   onReblog (status, e) {
-    dispatch(toggleReblog(status.get('id'), e.shiftKey));
+    dispatch(toggleReblog(status.get('id'), e?.shiftKey || false));
+  },
+
+  onReblogForceModal (status) {
+    dispatch(toggleReblog(status.get('id'), false, true));
   },
 
   onFavourite (status) {
     dispatch(toggleFavourite(status.get('id')));
+  },
+
+  onEmojiReact (status, emoji) {
+    dispatch(emojiReact(status, emoji));
+  },
+
+  onUnEmojiReact (status, emoji) {
+    dispatch(unEmojiReact(status, emoji));
   },
 
   onBookmark (status) {
@@ -86,6 +103,15 @@ const mapDispatchToProps = (dispatch, { contextType }) => ({
     } else {
       dispatch(bookmark(status));
     }
+  },
+
+  onBookmarkCategoryAdder (status) {
+    dispatch(openModal({
+      modalType: 'BOOKMARK_CATEGORY_ADDER',
+      modalProps: {
+        statusId: status.get('id'),
+      },
+    }));
   },
 
   onPin (status) {
@@ -120,6 +146,14 @@ const mapDispatchToProps = (dispatch, { contextType }) => ({
         dispatch(editStatus(status.get('id')));
       }
     });
+  },
+
+  onReference (status, router) {
+    dispatch(insertReferenceCompose(0, status.get('url'), 'BT', router));
+  },
+
+  onQuote (status, router) {
+    dispatch(insertReferenceCompose(0, status.get('url'), 'QT', router));
   },
 
   onTranslate (status) {

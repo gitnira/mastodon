@@ -9,10 +9,12 @@ class REST::InstanceSerializer < ActiveModel::Serializer
 
   include InstanceHelper
   include RoutingHelper
+  include KmyblueCapabilitiesHelper
+  include RegistrationLimitationHelper
 
   attributes :domain, :title, :version, :source_url, :description,
              :usage, :thumbnail, :icon, :languages, :configuration,
-             :registrations, :api_versions
+             :registrations, :fedibird_capabilities, :api_versions
 
   has_one :contact, serializer: ContactSerializer
   has_many :rules, serializer: REST::RuleSerializer
@@ -49,7 +51,7 @@ class REST::InstanceSerializer < ActiveModel::Serializer
   def usage
     {
       users: {
-        active_month: limited_federation? ? 0 : object.active_user_count(4),
+        active_month: object.active_user_count(4),
       },
     }
   end
@@ -61,11 +63,11 @@ class REST::InstanceSerializer < ActiveModel::Serializer
         status: object.status_page_url,
         about: about_url,
         privacy_policy: privacy_policy_url,
-        terms_of_service: TermsOfService.current.present? ? terms_of_service_url : nil,
+        terms_of_service: TermsOfService.live.exists? ? terms_of_service_url : nil,
       },
 
       vapid: {
-        public_key: Rails.configuration.x.vapid.public_key,
+        public_key: Rails.configuration.x.vapid_public_key,
       },
 
       accounts: {
@@ -76,6 +78,8 @@ class REST::InstanceSerializer < ActiveModel::Serializer
       statuses: {
         max_characters: StatusLengthValidator::MAX_CHARS,
         max_media_attachments: Status::MEDIA_ATTACHMENTS_LIMIT,
+        max_media_attachments_with_poll: Status::MEDIA_ATTACHMENTS_LIMIT_WITH_POLL,
+        max_media_attachments_from_activitypub: Status::MEDIA_ATTACHMENTS_LIMIT_FROM_REMOTE,
         characters_reserved_per_url: StatusLengthValidator::URL_PLACEHOLDER_CHARS,
       },
 
@@ -94,20 +98,39 @@ class REST::InstanceSerializer < ActiveModel::Serializer
         max_characters_per_option: PollOptionsValidator::MAX_OPTION_CHARS,
         min_expiration: PollExpirationValidator::MIN_EXPIRATION,
         max_expiration: PollExpirationValidator::MAX_EXPIRATION,
+        allow_image: true,
       },
 
       translation: {
         enabled: TranslationService.configured?,
       },
 
-      limited_federation: limited_federation?,
+      emoji_reactions: {
+        max_reactions: EmojiReaction::EMOJI_REACTION_LIMIT,
+        max_reactions_per_account: EmojiReaction::EMOJI_REACTION_PER_ACCOUNT_LIMIT,
+        max_reactions_per_remote_account: EmojiReaction::EMOJI_REACTION_PER_REMOTE_ACCOUNT_LIMIT,
+      },
+
+      reaction_deck: {
+        max_emojis: User::REACTION_DECK_MAX,
+      },
+
+      reactions: {
+        max_reactions: EmojiReaction::EMOJI_REACTION_PER_ACCOUNT_LIMIT,
+      },
+
+      # https://github.com/mastodon/mastodon/pull/27009
+      search: {
+        enabled: Chewy.enabled?,
+      },
     }
   end
 
   def registrations
     {
       enabled: registrations_enabled?,
-      approval_required: Setting.registrations_mode == 'approved',
+      approval_required: Setting.registrations_mode == 'approved' || (Setting.registrations_mode == 'open' && !registrations_in_time?),
+      limit_reached: Setting.registrations_mode != 'none' && reach_registrations_limit?,
       reason_required: Setting.registrations_mode == 'approved' && Setting.require_invite_text,
       message: registrations_enabled? ? nil : registrations_message,
       min_age: Setting.min_age.presence,
@@ -122,15 +145,11 @@ class REST::InstanceSerializer < ActiveModel::Serializer
   private
 
   def registrations_enabled?
-    Setting.registrations_mode != 'none' && !Rails.configuration.x.single_user_mode
+    Setting.registrations_mode != 'none' && !reach_registrations_limit? && !Rails.configuration.x.single_user_mode
   end
 
   def registrations_message
     markdown.render(Setting.closed_registrations_message) if Setting.closed_registrations_message.present?
-  end
-
-  def limited_federation?
-    Rails.configuration.x.mastodon.limited_federation_mode
   end
 
   def markdown

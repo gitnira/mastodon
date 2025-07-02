@@ -3,7 +3,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams } from 'react-router-dom';
 
-import TrendingUpIcon from '@/material-icons/400-24px/trending_up.svg?react';
+import ExploreIcon from '@/material-icons/400-24px/explore.svg?react';
 import { expandLinkTimeline } from 'mastodon/actions/timelines';
 import { Column } from 'mastodon/components/column';
 import type { ColumnRef } from 'mastodon/components/column';
@@ -50,7 +50,7 @@ export const LinkTimeline: React.FC<{
     <Column bindToDocument={!multiColumn} ref={columnRef} label={story?.title}>
       <ColumnHeader
         icon='explore'
-        iconComponent={TrendingUpIcon}
+        iconComponent={ExploreIcon}
         title={story?.title}
         onClick={handleHeaderClick}
         multiColumn={multiColumn}

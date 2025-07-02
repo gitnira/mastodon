@@ -4,6 +4,8 @@ import { FormattedMessage } from 'react-intl';
 
 import { animated, config, useSpring } from '@react-spring/web';
 
+import { reduceMotion } from 'mastodon/initial_state';
+
 interface UploadAreaProps {
   active?: boolean;
   onClose: () => void;
@@ -37,6 +39,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ active, onClose }) => {
       opacity: 1,
     },
     reverse: !active,
+    immediate: reduceMotion,
   });
   const backgroundAnimStyles = useSpring({
     from: {
@@ -47,6 +50,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ active, onClose }) => {
     },
     reverse: !active,
     config: config.wobbly,
+    immediate: reduceMotion,
   });
 
   return (

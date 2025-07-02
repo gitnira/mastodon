@@ -30,6 +30,10 @@ class ActivityPub::ProcessCollectionService < BaseService
       @json.delete('signature') unless safe_for_forwarding?(original_json, @json)
     end
 
+    # any namespaces for general-original activity type
+    @json['type'] = 'EmojiReact' if original_json['type'] == 'EmojiReact'
+    @json['type'] = 'EmojiReaction' if original_json['type'] == 'EmojiReaction'
+
     case @json['type']
     when 'Collection', 'CollectionPage'
       process_items @json['items']
@@ -49,11 +53,15 @@ class ActivityPub::ProcessCollectionService < BaseService
   end
 
   def suspended_actor?
-    @account.suspended? && !activity_allowed_while_suspended?
+    @account.suspended? && (@account.remote_pending ? !activity_allowed_while_remote_pending? : !activity_allowed_while_suspended?)
   end
 
   def activity_allowed_while_suspended?
     %w(Delete Reject Undo Update).include?(@json['type'])
+  end
+
+  def activity_allowed_while_remote_pending?
+    %w(Follow Create).include?(@json['type']) || activity_allowed_while_suspended?
   end
 
   def process_items(items)

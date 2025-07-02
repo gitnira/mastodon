@@ -1,11 +1,11 @@
 import { createAction } from '@reduxjs/toolkit';
 
 export const openDropdownMenu = createAction<{
-  id: number;
+  id: string;
   keyboard: boolean;
-  scrollKey?: string;
+  scrollKey: string;
 }>('dropdownMenu/open');
 
-export const closeDropdownMenu = createAction<{ id: number }>(
+export const closeDropdownMenu = createAction<{ id: string }>(
   'dropdownMenu/close',
 );

@@ -191,6 +191,33 @@ RSpec.shared_examples 'Account::Search' do
       end
     end
 
+    context 'when limiting search to follower accounts' do
+      it 'accepts ?, \, : and space as delimiter' do
+        match = Fabricate(
+          :account,
+          display_name: 'A & l & i & c & e',
+          username: 'username',
+          domain: 'example.com'
+        )
+        match.follow!(account)
+
+        results = described_class.advanced_search_for('A?l\i:c e', account, limit: 10, follower: true)
+        expect(results).to eq [match]
+      end
+
+      it 'does not return non-follower accounts' do
+        Fabricate(
+          :account,
+          display_name: 'A & l & i & c & e',
+          username: 'username',
+          domain: 'example.com'
+        )
+
+        results = described_class.advanced_search_for('A?l\i:c e', account, limit: 10, follower: true)
+        expect(results).to eq []
+      end
+    end
+
     it 'does not return suspended users' do
       Fabricate(
         :account,

@@ -9,14 +9,15 @@ import { fetchRelationships, followAccount } from 'mastodon/actions/accounts';
 import { openModal } from 'mastodon/actions/modal';
 import { Button } from 'mastodon/components/button';
 import { LoadingIndicator } from 'mastodon/components/loading_indicator';
-import { me } from 'mastodon/initial_state';
+import { me, isShowItem } from 'mastodon/initial_state';
 import { useAppDispatch, useAppSelector } from 'mastodon/store';
 
 const messages = defineMessages({
   unfollow: { id: 'account.unfollow', defaultMessage: 'Unfollow' },
   follow: { id: 'account.follow', defaultMessage: 'Follow' },
   followBack: { id: 'account.follow_back', defaultMessage: 'Follow back' },
-  editProfile: { id: 'account.edit_profile', defaultMessage: 'Edit profile' },
+  mutual: { id: 'account.mutual', defaultMessage: 'Mutual' },
+  edit_profile: { id: 'account.edit_profile', defaultMessage: 'Edit profile' },
 });
 
 export const FollowButton: React.FC<{
@@ -72,12 +73,18 @@ export const FollowButton: React.FC<{
   if (!signedIn) {
     label = intl.formatMessage(messages.follow);
   } else if (accountId === me) {
-    label = intl.formatMessage(messages.editProfile);
+    label = intl.formatMessage(messages.edit_profile);
   } else if (!relationship) {
     label = <LoadingIndicator />;
+  } else if (
+    relationship.following &&
+    isShowItem('relationships') &&
+    relationship.followed_by
+  ) {
+    label = intl.formatMessage(messages.mutual);
   } else if (relationship.following || relationship.requested) {
     label = intl.formatMessage(messages.unfollow);
-  } else if (relationship.followed_by) {
+  } else if (relationship.followed_by && isShowItem('relationships')) {
     label = intl.formatMessage(messages.followBack);
   } else {
     label = intl.formatMessage(messages.follow);

@@ -112,17 +112,17 @@ namespace :tests do
         exit(1)
       end
 
-      unless Identity.where(provider: 'foo', uid: 0).one?
+      unless Identity.where(provider: 'foo', uid: 0).count == 1
         puts 'Identities not deduplicated as expected'
         exit(1)
       end
 
-      unless WebauthnCredential.where(user_id: 1, nickname: 'foo').one?
+      unless WebauthnCredential.where(user_id: 1, nickname: 'foo').count == 1
         puts 'Webauthn credentials not deduplicated as expected'
         exit(1)
       end
 
-      unless AccountAlias.where(account_id: 1, uri: 'https://example.com/users/foobar').one?
+      unless AccountAlias.where(account_id: 1, uri: 'https://example.com/users/foobar').count == 1
         puts 'Account aliases not deduplicated as expected'
         exit(1)
       end
@@ -232,7 +232,7 @@ namespace :tests do
         INSERT INTO "settings"
           (id, thing_type, thing_id, var, value, created_at, updated_at)
         VALUES
-          (3, 'User', 1, 'notification_emails', E'--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\nfollow: false\nreblog: true\nfavourite: true\nmention: false\nfollow_request: true\ndigest: true\nreport: true\npending_account: false\ntrending_tag: true\nappeal: true\n', now(), now()),
+          (3, 'User', 1, 'notification_emails', E'--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\nfollow: false\nreblog: true\nfavourite: true\nmention: false\nfollow_request: true\ndigest: true\nreport: true\npending_account: false\npending_friend_server: true\ntrending_tag: true\nappeal: true\n', now(), now()),
           (4, 'User', 1, 'trends', E'--- false\n', now(), now());
 
         INSERT INTO "accounts"

@@ -1,3 +1,4 @@
+import './public-path';
 import axios from 'axios';
 
 import ready from '../mastodon/ready';

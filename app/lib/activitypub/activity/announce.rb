@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ActivityPub::Activity::Announce < ActivityPub::Activity
+  include NgRuleHelper
+
   def perform
     return reject_payload! if delete_arrived_first?(@json['id']) || !related_to_local_activity?
     return reject_payload! if @object.nil?
@@ -10,6 +12,7 @@ class ActivityPub::Activity::Announce < ActivityPub::Activity
 
       return reject_payload! if original_status.nil? || !announceable?(original_status)
       return if requested_through_relay?
+      return unless check_invalid_reaction_for_ng_rule! @account, uri: @json['id'], reaction_type: 'reblog', recipient: original_status.account, target_status: original_status
 
       @status = Status.find_by(account: @account, reblog: original_status)
 

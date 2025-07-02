@@ -12,7 +12,7 @@ class PrecomputeFeedService < BaseService
       FeedManager.instance.populate_list(list) unless skip_timeline?(:list, list.id)
     end
   ensure
-    HomeFeed.new(account).regeneration_finished!
+    redis.del("account:#{account.id}:regeneration")
   end
 
   private

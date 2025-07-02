@@ -26,6 +26,7 @@
               input_html: { pattern: '[0-9]+' },
               warning_hint: t('simple_form.hints.form_admin_settings.content_cache_retention_period'),
               wrapper: :with_block_label
+    = f.input :delete_content_cache_without_reaction, as: :boolean, wrapper: :with_label, kmyblue: true, hint: t('simple_form.hints.form_admin_settings.delete_content_cache_without_reaction')
 
   .actions
     = f.button :button, t('generic.save_changes'), type: :submit

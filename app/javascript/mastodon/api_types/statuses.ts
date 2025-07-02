@@ -5,13 +5,19 @@ import type { ApiCustomEmojiJSON } from './custom_emoji';
 import type { ApiMediaAttachmentJSON } from './media_attachments';
 import type { ApiPollJSON } from './polls';
 
-// See app/modals/status.rb
+// See app/modals/status.rb visibility+limited_scope
 export type StatusVisibility =
   | 'public'
   | 'unlisted'
   | 'private'
-  // | 'limited' // This is never exposed to the API (they become `private`)
-  | 'direct';
+  | 'direct'
+  | 'public_unlisted'
+  | 'login'
+  | 'mutual'
+  | 'circle'
+  | 'personal'
+  | 'reply'
+  | 'limited';
 
 export interface ApiStatusApplicationJSON {
   name: string;
@@ -118,9 +124,4 @@ export interface ApiStatusJSON {
 
   card?: ApiPreviewCardJSON;
   poll?: ApiPollJSON;
-}
-
-export interface ApiContextJSON {
-  ancestors: ApiStatusJSON[];
-  descendants: ApiStatusJSON[];
 }

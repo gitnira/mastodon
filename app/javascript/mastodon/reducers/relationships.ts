@@ -24,7 +24,6 @@ import {
   pinAccountSuccess,
   unpinAccountSuccess,
   fetchRelationshipsSuccess,
-  removeAccountFromFollowers,
 } from '../actions/accounts_typed';
 import {
   blockDomainSuccess,
@@ -110,8 +109,7 @@ export const relationshipsReducer: Reducer<State> = (
     unmuteAccountSuccess.match(action) ||
     pinAccountSuccess.match(action) ||
     unpinAccountSuccess.match(action) ||
-    isFulfilled(submitAccountNote)(action) ||
-    isFulfilled(removeAccountFromFollowers)(action)
+    isFulfilled(submitAccountNote)(action)
   )
     return normalizeRelationship(state, action.payload.relationship);
   else if (fetchRelationshipsSuccess.match(action))

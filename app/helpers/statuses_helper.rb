@@ -6,6 +6,9 @@ module StatusesHelper
     unlisted: 'lock_open',
     private: 'lock',
     direct: 'alternate_email',
+    public_unlisted: 'cloud',
+    login: 'key',
+    limited: 'shield',
   }.freeze
 
   def nothing_here(extra_classes = '')

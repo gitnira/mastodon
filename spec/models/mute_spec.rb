@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe Mute do
-  it_behaves_like 'Expireable'
+  include_examples 'Expireable'
 
   describe 'Associations' do
     it { is_expected.to belong_to(:account).required }

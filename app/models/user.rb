@@ -15,6 +15,9 @@
 #  current_sign_in_at        :datetime
 #  disabled                  :boolean          default(FALSE), not null
 #  email                     :string           default(""), not null
+#  encrypted_otp_secret      :string
+#  encrypted_otp_secret_iv   :string
+#  encrypted_otp_secret_salt :string
 #  encrypted_password        :string           default(""), not null
 #  last_emailed_at           :datetime
 #  last_sign_in_at           :datetime
@@ -22,7 +25,6 @@
 #  otp_backup_codes          :string           is an Array
 #  otp_required_for_login    :boolean          default(FALSE), not null
 #  otp_secret                :string
-#  require_tos_interstitial  :boolean          default(FALSE), not null
 #  reset_password_sent_at    :datetime
 #  reset_password_token      :string
 #  settings                  :text
@@ -43,21 +45,19 @@
 
 class User < ApplicationRecord
   self.ignored_columns += %w(
-    admin
-    current_sign_in_ip
-    encrypted_otp_secret
-    encrypted_otp_secret_iv
-    encrypted_otp_secret_salt
-    filtered_languages
-    last_sign_in_ip
-    moderator
     remember_created_at
     remember_token
+    current_sign_in_ip
+    last_sign_in_ip
     skip_sign_in_token
+    filtered_languages
+    admin
+    moderator
   )
 
   include LanguagesHelper
   include Redisable
+  include RegistrationLimitationHelper
   include User::HasSettings
   include User::LdapAuthenticable
   include User::Omniauthable
@@ -72,8 +72,13 @@ class User < ApplicationRecord
   # to check their feed
   ACTIVE_DURATION = ENV.fetch('USER_ACTIVE_DAYS', 7).to_i.days.freeze
 
+  REACTION_DECK_MAX = 256
+
   devise :two_factor_authenticatable,
+         otp_secret_encryption_key: Rails.configuration.x.otp_secret,
          otp_secret_length: 32
+
+  include LegacyOtpSecret # Must be after the above `devise` line in order to override the legacy method
 
   devise :two_factor_backupable,
          otp_number_of_backup_codes: 10
@@ -98,6 +103,8 @@ class User < ApplicationRecord
   accepts_nested_attributes_for :invite_request, reject_if: ->(attributes) { attributes['text'].blank? && !Setting.require_invite_text }
   validates :invite_request, presence: true, on: :create, if: :invite_text_required?
 
+  has_one :custom_css, inverse_of: :user, dependent: :destroy
+
   validates :email, presence: true, email_address: true
 
   validates_with UserEmailValidator, if: -> { ENV['EMAIL_DOMAIN_LISTS_APPLY_AFTER_CONFIRMATION'] == 'true' || !confirmed? }
@@ -110,7 +117,7 @@ class User < ApplicationRecord
   validates_with RegistrationFormTimeValidator, on: :create
   validates :website, absence: true, on: :create
   validates :confirm_password, absence: true, on: :create
-  validates :date_of_birth, presence: true, date_of_birth: true, on: :create, if: -> { Setting.min_age.present? && !bypass_registration_checks? }
+  validates :date_of_birth, presence: true, date_of_birth: true, on: :create, if: -> { Setting.min_age.present? }
   validate :validate_role_elevation
 
   scope :account_not_suspended, -> { joins(:account).merge(Account.without_suspended) }
@@ -142,7 +149,7 @@ class User < ApplicationRecord
   delegate :can?, to: :role
 
   attr_reader :invite_code, :date_of_birth
-  attr_writer :external, :bypass_registration_checks, :current_account
+  attr_writer :external, :bypass_invite_request_check, :current_account
 
   def self.those_who_can(*any_of_privileges)
     matching_role_ids = UserRole.that_can(*any_of_privileges).map(&:id)
@@ -210,6 +217,8 @@ class User < ApplicationRecord
   end
 
   def confirm
+    raise Mastodon::ValidationError, I18n.t('devise.registrations.sign_up_failed_because_reach_limit') if !invited? && reach_registrations_limit?
+
     wrap_email_confirmation do
       super
     end
@@ -221,12 +230,6 @@ class User < ApplicationRecord
       skip_confirmation!
       save!
     end
-  end
-
-  def email_domain
-    Mail::Address.new(email).domain
-  rescue Mail::Field::ParseError
-    nil
   end
 
   def update_sign_in!(new_sign_in: false)
@@ -243,6 +246,22 @@ class User < ApplicationRecord
 
     save(validate: false) unless new_record?
     prepare_returning_user!
+  end
+
+  def disable_css
+    false
+  end
+
+  def custom_css_text
+    custom_css&.css.to_s
+  end
+
+  def custom_css_text=(val)
+    if custom_css.present?
+      custom_css.update!(css: val)
+    else
+      CustomCss.create!(user: self, css: val)
+    end
   end
 
   def pending?
@@ -498,15 +517,15 @@ class User < ApplicationRecord
   end
 
   def open_registrations?
-    Setting.registrations_mode == 'open'
+    Setting.registrations_mode == 'open' && registrations_in_time?
   end
 
   def external?
     !!@external
   end
 
-  def bypass_registration_checks?
-    @bypass_registration_checks
+  def bypass_invite_request_check?
+    @bypass_invite_request_check
   end
 
   def sanitize_role
@@ -519,6 +538,7 @@ class User < ApplicationRecord
     ActivityTracker.record('activity:logins', id)
     UserMailer.welcome(self).deliver_later(wait: 1.hour)
     TriggerWebhookWorker.perform_async('account.approved', 'Account', account_id)
+    reset_registration_limit_caches!
   end
 
   def prepare_returning_user!
@@ -537,11 +557,7 @@ class User < ApplicationRecord
   end
 
   def regenerate_feed!
-    home_feed = HomeFeed.new(account)
-    unless home_feed.regenerating?
-      home_feed.regeneration_in_progress!
-      RegenerationWorker.perform_async(account_id)
-    end
+    RegenerationWorker.perform_async(account_id) if redis.set("account:#{account_id}:regeneration", true, nx: true, ex: 1.day.seconds)
   end
 
   def needs_feed_update?
@@ -557,7 +573,7 @@ class User < ApplicationRecord
   end
 
   def invite_text_required?
-    Setting.require_invite_text && !open_registrations? && !invited? && !external? && !bypass_registration_checks?
+    Setting.require_invite_text && !open_registrations? && !invited? && !external? && !bypass_invite_request_check?
   end
 
   def trigger_webhooks

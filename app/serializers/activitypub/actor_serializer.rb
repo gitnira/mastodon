@@ -7,14 +7,14 @@ class ActivityPub::ActorSerializer < ActivityPub::Serializer
   context :security
 
   context_extensions :manually_approves_followers, :featured, :also_known_as,
-                     :moved_to, :property_value, :discoverable, :suspended,
-                     :memorial, :indexable, :attribution_domains
+                     :moved_to, :property_value, :discoverable, :suspended, :searchable_by,
+                     :other_setting, :memorial, :indexable, :attribution_domains
 
   attributes :id, :type, :following, :followers,
              :inbox, :outbox, :featured, :featured_tags,
              :preferred_username, :name, :summary,
              :url, :manually_approves_followers,
-             :discoverable, :indexable, :published, :memorial
+             :discoverable, :indexable, :published, :memorial, :searchable_by, :other_setting
 
   has_one :public_key, serializer: ActivityPub::PublicKeySerializer
 
@@ -92,6 +92,14 @@ class ActivityPub::ActorSerializer < ActivityPub::Serializer
   end
 
   def discoverable
+    if object.local?
+      object.user&.setting_discoverable_local ? false : original_discoverable
+    else
+      original_discoverable
+    end
+  end
+
+  def original_discoverable
     object.unavailable? ? false : (object.discoverable || false)
   end
 
@@ -161,6 +169,21 @@ class ActivityPub::ActorSerializer < ActivityPub::Serializer
 
   def published
     object.created_at.midnight.iso8601
+  end
+
+  def searchable_by
+    ActivityPub::TagManager.instance.account_searchable_by(object)
+  end
+
+  def other_setting
+    config = object.public_settings
+    config.map do |k, v|
+      {
+        type: 'PropertyValue',
+        name: k,
+        value: v,
+      }
+    end
   end
 
   class CustomEmojiSerializer < ActivityPub::EmojiSerializer

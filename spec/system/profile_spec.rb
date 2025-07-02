@@ -5,6 +5,8 @@ require 'rails_helper'
 RSpec.describe 'Profile' do
   include ProfileStories
 
+  let(:local_domain) { Rails.configuration.x.local_domain }
+
   before do
     as_a_logged_in_user
     Fabricate(:user, account: Fabricate(:account, username: 'alice'))
@@ -14,7 +16,7 @@ RSpec.describe 'Profile' do
     visit account_path('alice')
 
     expect(page)
-      .to have_title("alice (@alice@#{local_domain_uri.host})")
+      .to have_title("alice (@alice@#{local_domain})")
   end
 
   it 'I can change my account' do

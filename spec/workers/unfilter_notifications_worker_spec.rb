@@ -5,7 +5,6 @@ require 'rails_helper'
 RSpec.describe UnfilterNotificationsWorker do
   let(:recipient) { Fabricate(:account) }
   let(:sender) { Fabricate(:account) }
-  let(:worker) { described_class.new }
 
   before do
     # Populate multiple kinds of filtered notifications
@@ -68,22 +67,23 @@ RSpec.describe UnfilterNotificationsWorker do
   end
 
   describe '#perform' do
-    context 'with recipient and sender' do
-      subject { worker.perform(recipient.id, sender.id) }
+    context 'with single argument (prerelease behavior)' do
+      subject { described_class.new.perform(notification_request.id) }
+
+      let(:notification_request) { Fabricate(:notification_request, from_account: sender, account: recipient) }
 
       it_behaves_like 'shared behavior'
+
+      it 'destroys the notification request' do
+        expect { subject }
+          .to change { NotificationRequest.exists?(notification_request.id) }.to(false)
+      end
     end
 
-    context 'with missing records' do
-      it 'runs without error for missing sender' do
-        expect { worker.perform(recipient.id, nil) }
-          .to_not raise_error
-      end
+    context 'with two arguments' do
+      subject { described_class.new.perform(recipient.id, sender.id) }
 
-      it 'runs without error for missing recipient' do
-        expect { worker.perform(nil, sender.id) }
-          .to_not raise_error
-      end
+      it_behaves_like 'shared behavior'
     end
   end
 end

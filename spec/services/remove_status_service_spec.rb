@@ -8,12 +8,14 @@ RSpec.describe RemoveStatusService, :inline_jobs do
   let!(:alice)  { Fabricate(:account) }
   let!(:bob)    { Fabricate(:account, username: 'bob', domain: 'example.com') }
   let!(:jeff)   { Fabricate(:account) }
-  let!(:hank)   { Fabricate(:account, username: 'hank', protocol: :activitypub, domain: 'example.com', inbox_url: 'http://example.com/inbox') }
-  let!(:bill)   { Fabricate(:account, username: 'bill', protocol: :activitypub, domain: 'example2.com', inbox_url: 'http://example2.com/inbox') }
+  let!(:hank)   { Fabricate(:account, username: 'hank', protocol: :activitypub, domain: 'example.com', shared_inbox_url: 'http://example.com/inbox', inbox_url: 'http://example.com/hank/inbox') }
+  let!(:bill)   { Fabricate(:account, username: 'bill', protocol: :activitypub, domain: 'example2.com', shared_inbox_url: 'http://example2.com/inbox', inbox_url: 'http://example2.com/bill/inbox') }
 
   before do
     stub_request(:post, hank.inbox_url).to_return(status: 200)
+    stub_request(:post, hank.shared_inbox_url).to_return(status: 200)
     stub_request(:post, bill.inbox_url).to_return(status: 200)
+    stub_request(:post, bill.shared_inbox_url).to_return(status: 200)
 
     jeff.follow!(alice)
     hank.follow!(alice)
@@ -63,7 +65,7 @@ RSpec.describe RemoveStatusService, :inline_jobs do
     end
 
     def delete_delivery(target, status)
-      a_request(:post, target.inbox_url)
+      a_request(:post, target.shared_inbox_url)
         .with(body: delete_activity_for(status))
     end
 
@@ -76,6 +78,70 @@ RSpec.describe RemoveStatusService, :inline_jobs do
           'atomUri' => OStatus::TagManager.instance.uri_for(status),
         }
       )
+    end
+  end
+
+  context 'when removed status is null-searchability' do
+    let(:status) { PostStatusService.new.call(alice, visibility: 'unlisted', text: 'Public post') }
+
+    before do
+      status.update!(searchability: nil)
+    end
+
+    it 'does not throw error' do
+      expect { subject.call(status) }.to_not raise_error
+    end
+  end
+
+  context 'when removed status is limited' do
+    let(:status) { PostStatusService.new.call(alice, visibility: 'mutual', text: 'limited post') }
+
+    before do
+      status.mentions << Fabricate(:mention, account: hank, silent: true)
+    end
+
+    it 'sends Delete activity to followers' do
+      subject.call(status)
+      expect(a_request(:post, hank.shared_inbox_url).with(
+               body: hash_including({
+                 'type' => 'Delete',
+                 'object' => {
+                   'type' => 'Tombstone',
+                   'id' => ActivityPub::TagManager.instance.uri_for(status),
+                   'atomUri' => OStatus::TagManager.instance.uri_for(status),
+                 },
+               })
+             )).to have_been_made.once
+    end
+  end
+
+  context 'when removed status is limited and remote conversation' do
+    let(:status) { PostStatusService.new.call(alice, visibility: 'mutual', text: 'limited post') }
+
+    before do
+      status.conversation.update(uri: 'http://example2.com/conversation', inbox_url: 'http://example2.com/bill/inbox')
+      status.mentions << Fabricate(:mention, account: hank, silent: true)
+    end
+
+    it 'sends Delete activity to conversation' do
+      subject.call(status)
+      expect(a_request(:post, bill.inbox_url).with(
+               body: hash_including({
+                 'type' => 'Delete',
+                 'object' => {
+                   'type' => 'Tombstone',
+                   'id' => ActivityPub::TagManager.instance.uri_for(status),
+                   'atomUri' => OStatus::TagManager.instance.uri_for(status),
+                 },
+               })
+             )).to have_been_made.once
+    end
+
+    it 'do not send Delete activity to followers', :inline_jobs do
+      subject.call(status)
+
+      expect(a_request(:post, hank.inbox_url)).to_not have_been_made
+      expect(a_request(:post, hank.shared_inbox_url)).to_not have_been_made
     end
   end
 
@@ -116,7 +182,7 @@ RSpec.describe RemoveStatusService, :inline_jobs do
   end
 
   def undo_delivery(target, status)
-    a_request(:post, target.inbox_url)
+    a_request(:post, target.shared_inbox_url)
       .with(body: undo_activity_for(status))
   end
 

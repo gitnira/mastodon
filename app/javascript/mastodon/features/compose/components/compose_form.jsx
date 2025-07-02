@@ -12,13 +12,17 @@ import { length } from 'stringz';
 
 import { missingAltTextModal } from 'mastodon/initial_state';
 
-import AutosuggestInput from 'mastodon/components/autosuggest_input';
-import AutosuggestTextarea from 'mastodon/components/autosuggest_textarea';
-import { Button } from 'mastodon/components/button';
-import { LoadingIndicator } from 'mastodon/components/loading_indicator';
+import AutosuggestInput from '../../../components/autosuggest_input';
+import AutosuggestTextarea from '../../../components/autosuggest_textarea';
+import { Button } from '../../../components/button';
+import CircleDropdownContainer from '../containers/circle_dropdown_container';
 import EmojiPickerDropdown from '../containers/emoji_picker_dropdown_container';
+import ExpirationDropdownContainer from '../containers/expiration_dropdown_container';
+import FeaturedTagsDropdownContainer from '../containers/featured_tags_dropdown_container';
+import MarkdownButtonContainer from '../containers/markdown_button_container';
 import PollButtonContainer from '../containers/poll_button_container';
 import PrivacyDropdownContainer from '../containers/privacy_dropdown_container';
+import SearchabilityDropdownContainer from '../containers/searchability_dropdown_container';
 import SpoilerButtonContainer from '../containers/spoiler_button_container';
 import UploadButtonContainer from '../containers/upload_button_container';
 import { countableText } from '../util/counter';
@@ -49,6 +53,7 @@ class ComposeForm extends ImmutablePureComponent {
     suggestions: ImmutablePropTypes.list,
     spoiler: PropTypes.bool,
     privacy: PropTypes.string,
+    searchability: PropTypes.string,
     spoilerText: PropTypes.string,
     focusDate: PropTypes.instanceOf(Date),
     caretPosition: PropTypes.number,
@@ -65,6 +70,8 @@ class ComposeForm extends ImmutablePureComponent {
     onChangeSpoilerText: PropTypes.func.isRequired,
     onPaste: PropTypes.func.isRequired,
     onPickEmoji: PropTypes.func.isRequired,
+    onPickExpiration: PropTypes.func.isRequired,
+    onPickFeaturedTag: PropTypes.func.isRequired,
     autoFocus: PropTypes.bool,
     withoutNavigation: PropTypes.bool,
     anyMedia: PropTypes.bool,
@@ -72,6 +79,7 @@ class ComposeForm extends ImmutablePureComponent {
     isInReply: PropTypes.bool,
     singleColumn: PropTypes.bool,
     lang: PropTypes.string,
+    circleId: PropTypes.string,
     maxChars: PropTypes.number,
   };
 
@@ -103,11 +111,11 @@ class ComposeForm extends ImmutablePureComponent {
   };
 
   canSubmit = () => {
-    const { isSubmitting, isChangingUpload, isUploading, anyMedia, maxChars } = this.props;
+    const { isSubmitting, isChangingUpload, isUploading, anyMedia, maxChars, privacy, circleId, isEditing } = this.props;
     const fulltext = this.getFulltextForCharacterCounting();
     const isOnlyWhitespace = fulltext.length !== 0 && fulltext.trim().length === 0;
 
-    return !(isSubmitting || isUploading || isChangingUpload || length(fulltext) > maxChars || (isOnlyWhitespace && !anyMedia));
+    return !(isSubmitting || isUploading || isChangingUpload || length(fulltext) > maxChars || (isOnlyWhitespace && !anyMedia) || (privacy === 'circle' && !isEditing && !circleId) || privacy === 'banned');
   };
 
   handleSubmit = (e) => {
@@ -225,9 +233,22 @@ class ComposeForm extends ImmutablePureComponent {
     this.props.onPickEmoji(position, data, needsSpace);
   };
 
+  handleExpirationPick = (data) => {
+    const position     = this.textareaRef.current.selectionStart;
+
+    this.props.onPickExpiration(position, data);
+  };
+
+  handleFeaturedTagPick = (data) => {
+    const position     = this.textareaRef.current.selectionStart;
+
+    this.props.onPickExpiration(position, data);
+  };
+
   render () {
-    const { intl, onPaste, autoFocus, withoutNavigation, maxChars, isSubmitting } = this.props;
+    const { intl, onPaste, autoFocus, withoutNavigation, maxChars } = this.props;
     const { highlighted } = this.state;
+    const disabled = this.props.isSubmitting;
 
     return (
       <form className='compose-form' onSubmit={this.handleSubmit}>
@@ -246,7 +267,7 @@ class ComposeForm extends ImmutablePureComponent {
                 <AutosuggestInput
                   placeholder={intl.formatMessage(messages.spoiler_placeholder)}
                   value={this.props.spoilerText}
-                  disabled={isSubmitting}
+                  disabled={disabled}
                   onChange={this.handleChangeSpoilerText}
                   onKeyDown={this.handleKeyDown}
                   ref={this.setSpoilerText}
@@ -268,7 +289,7 @@ class ComposeForm extends ImmutablePureComponent {
             <AutosuggestTextarea
               ref={this.textareaRef}
               placeholder={intl.formatMessage(messages.placeholder)}
-              disabled={isSubmitting}
+              disabled={disabled}
               value={this.props.text}
               onChange={this.handleChange}
               suggestions={this.props.suggestions}
@@ -291,6 +312,14 @@ class ComposeForm extends ImmutablePureComponent {
               <PrivacyDropdownContainer disabled={this.props.isEditing} />
               <LanguageDropdown />
             </div>
+            <div className='compose-form__dropdowns compose-form__dropdowns__second'>
+              <CircleDropdownContainer />
+            </div>
+            <div className='compose-form__dropdowns compose-form__dropdowns__second'>
+              <SearchabilityDropdownContainer disabled={this.props.isEditing} />
+              <ExpirationDropdownContainer onPickExpiration={this.handleExpirationPick} />
+              <FeaturedTagsDropdownContainer onPickTag={this.handleFeaturedTagPick} />
+            </div>
 
             <div className='compose-form__actions'>
               <div className='compose-form__buttons'>
@@ -298,22 +327,18 @@ class ComposeForm extends ImmutablePureComponent {
                 <PollButtonContainer />
                 <SpoilerButtonContainer />
                 <EmojiPickerDropdown onPickEmoji={this.handleEmojiPick} />
+                <MarkdownButtonContainer />
                 <CharacterCounter max={maxChars} text={this.getFulltextForCharacterCounting()} />
               </div>
+
 
               <div className='compose-form__submit'>
                 <Button
                   type='submit'
                   compact
+                  text={intl.formatMessage(this.props.isEditing ? messages.saveChanges : (this.props.isInReply ? messages.reply : messages.publish))}
                   disabled={!this.canSubmit()}
-                  loading={isSubmitting}
-                >
-                  {intl.formatMessage(
-                    this.props.isEditing ?
-                      messages.saveChanges : 
-                      (this.props.isInReply ? messages.reply : messages.publish)
-                  )}
-                </Button>
+                />
               </div>
             </div>
           </div>

@@ -91,4 +91,6 @@
       - else
         = render partial: 'custom_emoji', collection: @custom_emojis, locals: { f: f }
 
-= paginate @custom_emojis
+%nav.pagination
+  = link_to_previous_page @custom_emojis, safe_join([material_symbol('chevron_left'), t('pagination.prev')], ' '), rel: 'prev'
+  = link_to_next_page @custom_emojis, safe_join([t('pagination.next'), material_symbol('chevron_right')], ' '), rel: 'next'

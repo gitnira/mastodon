@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class OAuthUserinfoSerializer < ActiveModel::Serializer
+class OauthUserinfoSerializer < ActiveModel::Serializer
   include RoutingHelper
 
   attributes :iss, :sub, :name, :preferred_username, :profile, :picture

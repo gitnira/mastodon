@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe CustomFilter do
-  it_behaves_like 'Expireable'
+  include_examples 'Expireable'
 
   describe 'Validations' do
     it { is_expected.to validate_presence_of(:title) }

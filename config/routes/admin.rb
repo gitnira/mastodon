@@ -32,6 +32,21 @@ namespace :admin do
 
   resources :action_logs, only: [:index]
   resources :warning_presets, except: [:new, :show]
+  namespace :ng_words do
+    resource :keywords, only: [:show, :create], controller: 'keywords'
+    resource :white_list, only: [:show, :create], controller: 'white_list'
+    resource :settings, only: [:show, :create], controller: 'settings'
+  end
+  resources :ngword_histories, only: [:index]
+  resources :ng_rules, except: [:show] do
+    member do
+      post :duplicate
+    end
+  end
+  resources :ng_rule_histories, only: [:show]
+  resource :sensitive_words, only: [:show, :create]
+  resource :special_instances, only: [:show, :create]
+  resource :special_domains, only: [:show, :create]
 
   namespace :terms_of_service do
     resource :generate, only: [:show, :create]
@@ -85,22 +100,24 @@ namespace :admin do
     end
   end
 
+  resources :friend_servers, only: [:index, :new, :edit, :create, :update, :destroy] do
+    member do
+      post :follow
+      post :unfollow
+      post :accept
+      post :reject
+    end
+  end
+
   resources :instances, only: [:index, :show, :destroy], constraints: { id: %r{[^/]+} }, format: 'html' do
     member do
       post :clear_delivery_errors
       post :restart_delivery
       post :stop_delivery
     end
-
-    resources :moderation_notes, controller: 'instances/moderation_notes', only: [:create, :destroy]
   end
 
-  resources :rules, only: [:index, :new, :create, :edit, :update, :destroy] do
-    member do
-      post :move_up
-      post :move_down
-    end
-  end
+  resources :rules, only: [:index, :create, :edit, :update, :destroy]
 
   resources :webhooks do
     member do
@@ -142,6 +159,8 @@ namespace :admin do
       post :memorialize
       post :approve
       post :reject
+      post :approve_remote
+      post :reject_remote
       post :unblock_email
     end
 
@@ -154,6 +173,14 @@ namespace :admin do
     resource :action, only: [:new, :create], controller: 'account_actions'
 
     resources :statuses, only: [:index, :show] do
+      member do
+        post :remove_history
+        post :remove_media
+        post :force_sensitive
+        post :force_cw
+        post :remove_status
+      end
+
       collection do
         post :batch
       end
@@ -175,7 +202,7 @@ namespace :admin do
     end
   end
 
-  resources :custom_emojis, only: [:index, :new, :create] do
+  resources :custom_emojis, only: [:index, :new, :create, :edit, :update] do
     collection do
       post :batch
     end

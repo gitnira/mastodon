@@ -56,7 +56,7 @@ RSpec.describe Mastodon::CLI::IpBlocks do
     end
 
     context 'with valid IP addresses' do
-      it_behaves_like 'ip address blocking'
+      include_examples 'ip address blocking'
     end
 
     context 'when a specified IP address is already blocked' do
@@ -84,7 +84,7 @@ RSpec.describe Mastodon::CLI::IpBlocks do
             .to('sign_up_requires_approval')
         end
 
-        it_behaves_like 'ip address blocking'
+        include_examples 'ip address blocking'
       end
     end
 
@@ -101,25 +101,25 @@ RSpec.describe Mastodon::CLI::IpBlocks do
     context 'with --comment option' do
       let(:options) { { severity: 'no_access', comment: 'Spam' } }
 
-      it_behaves_like 'ip address blocking'
+      include_examples 'ip address blocking'
     end
 
     context 'with --duration option' do
       let(:options) { { severity: 'no_access', duration: 10.days } }
 
-      it_behaves_like 'ip address blocking'
+      include_examples 'ip address blocking'
     end
 
     context 'with "sign_up_requires_approval" severity' do
       let(:options) { { severity: 'sign_up_requires_approval' } }
 
-      it_behaves_like 'ip address blocking'
+      include_examples 'ip address blocking'
     end
 
     context 'with "sign_up_block" severity' do
       let(:options) { { severity: 'sign_up_block' } }
 
-      it_behaves_like 'ip address blocking'
+      include_examples 'ip address blocking'
     end
 
     context 'when a specified IP address fails to be blocked' do

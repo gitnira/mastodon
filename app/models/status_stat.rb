@@ -4,15 +4,19 @@
 #
 # Table name: status_stats
 #
-#  id                         :bigint(8)        not null, primary key
-#  status_id                  :bigint(8)        not null
-#  replies_count              :bigint(8)        default(0), not null
-#  reblogs_count              :bigint(8)        default(0), not null
-#  favourites_count           :bigint(8)        default(0), not null
-#  created_at                 :datetime         not null
-#  updated_at                 :datetime         not null
-#  untrusted_favourites_count :bigint(8)
-#  untrusted_reblogs_count    :bigint(8)
+#  id                            :bigint(8)        not null, primary key
+#  status_id                     :bigint(8)        not null
+#  replies_count                 :bigint(8)        default(0), not null
+#  reblogs_count                 :bigint(8)        default(0), not null
+#  favourites_count              :bigint(8)        default(0), not null
+#  created_at                    :datetime         not null
+#  updated_at                    :datetime         not null
+#  emoji_reactions               :string
+#  emoji_reactions_count         :integer          default(0), not null
+#  emoji_reaction_accounts_count :integer          default(0), not null
+#  status_referred_by_count      :integer          default(0), not null
+#  untrusted_favourites_count    :bigint(8)
+#  untrusted_reblogs_count       :bigint(8)
 #
 
 class StatusStat < ApplicationRecord
@@ -32,6 +36,22 @@ class StatusStat < ApplicationRecord
 
   def favourites_count
     [attributes['favourites_count'], 0].max
+  end
+
+  def emoji_reactions
+    attributes['emoji_reactions'] || ''
+  end
+
+  def emoji_reactions_count
+    [attributes['emoji_reactions_count'], 0].max
+  end
+
+  def emoji_reaction_accounts_count
+    [attributes['emoji_reaction_accounts_count'], 0].max
+  end
+
+  def status_referred_by_count
+    [attributes['status_referred_by_count'] || 0, 0].max
   end
 
   private

@@ -90,20 +90,22 @@ class Trends::Statuses < Trends::Base
 
   def eligible?(status)
     status.created_at.past? &&
-      status.public_visibility? &&
-      status.account.discoverable? &&
-      !status.account.silenced? &&
-      !status.account.sensitized? &&
-      status.spoiler_text.blank? &&
-      !status.sensitive? &&
-      !status.reply? &&
-      valid_locale?(status.language)
+      (status.public_visibility? || status.public_unlisted_visibility?) &&
+      status.account.discoverable? && !status.account.silenced? && !status.account.sensitized? &&
+      status.spoiler_text.blank? && (!status.sensitive? || status.media_attachments.none?) &&
+      !status.reply? && valid_locale?(status.language) && !domain_blocked?(status)
+  end
+
+  def domain_blocked?(status)
+    return false if status.account.local?
+
+    DomainBlock.block_trends?(status.account.domain)
   end
 
   def calculate_scores(statuses, at_time)
     items = statuses.map do |status|
       expected  = 1.0
-      observed  = (status.reblogs_count + status.favourites_count).to_f
+      observed  = (status.reblogs_count + status.favourites_count + (status.emoji_reaction_accounts_count * 0.8)).to_f
 
       score = if expected > observed || observed < options[:threshold]
                 0

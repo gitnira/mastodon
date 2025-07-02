@@ -54,9 +54,11 @@ async function loadIntlPluralRulesPolyfills(locale: string) {
     return;
   }
   // Load the polyfill 1st BEFORE loading data
-  await import('@formatjs/intl-pluralrules/polyfill-force');
   await import(
-    `../../../../node_modules/@formatjs/intl-pluralrules/locale-data/${unsupportedLocale}.js`
+    /* webpackChunkName: "i18n-pluralrules-polyfill" */ '@formatjs/intl-pluralrules/polyfill-force'
+  );
+  await import(
+    /* webpackChunkName: "i18n-pluralrules-polyfill-[request]" */ `@formatjs/intl-pluralrules/locale-data/${unsupportedLocale}`
   );
 }
 
@@ -68,9 +70,11 @@ async function loadIntlPluralRulesPolyfills(locale: string) {
 //   }
 //   // Load the polyfill 1st BEFORE loading data
 //   await import(
+//     /* webpackChunkName: "i18n-relativetimeformat-polyfill" */
 //     '@formatjs/intl-relativetimeformat/polyfill-force'
 //   );
 //   await import(
+//     /* webpackChunkName: "i18n-relativetimeformat-polyfill-[request]" */
 //     `@formatjs/intl-relativetimeformat/locale-data/${unsupportedLocale}`
 //   );
 // }

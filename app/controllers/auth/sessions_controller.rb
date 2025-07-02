@@ -73,7 +73,11 @@ class Auth::SessionsController < Devise::SessionsController
   end
 
   def user_params
-    params.expect(user: [:email, :password, :otp_attempt, credential: {}])
+    params.expect(user: [:email, :password, :otp_attempt, :disable_css, credential: {}])
+  end
+
+  def login_page_params
+    params.permit(:with_options)
   end
 
   def after_sign_in_path_for(resource)
@@ -113,6 +117,11 @@ class Auth::SessionsController < Devise::SessionsController
     truthy_param?(:continue)
   end
 
+  def with_login_options?
+    login_page_params[:with_options] == '1'
+  end
+  helper_method :with_login_options?
+
   def restart_session
     clear_attempt_from_session
     redirect_to new_user_session_path, alert: I18n.t('devise.failure.timeout')
@@ -151,6 +160,8 @@ class Auth::SessionsController < Devise::SessionsController
     sign_in(user)
     flash.delete(:notice)
 
+    disable_custom_css!(user) if disable_custom_css?
+
     LoginActivity.create(
       user: user,
       success: true,
@@ -160,6 +171,15 @@ class Auth::SessionsController < Devise::SessionsController
     )
 
     UserMailer.suspicious_sign_in(user, request.remote_ip, request.user_agent, Time.now.utc).deliver_later! if @login_is_suspicious
+  end
+
+  def disable_custom_css?
+    user_params[:disable_css].present? && user_params[:disable_css] == '1'
+  end
+
+  def disable_custom_css!(user)
+    user.settings['web.use_custom_css'] = false
+    user.save!
   end
 
   def suspicious_sign_in?(user)
@@ -177,7 +197,9 @@ class Auth::SessionsController < Devise::SessionsController
     )
 
     # Only send a notification email every hour at most
-    return if redis.set("2fa_failure_notification:#{user.id}", '1', ex: 1.hour, get: true).present?
+    return if redis.get("2fa_failure_notification:#{user.id}").present?
+
+    redis.set("2fa_failure_notification:#{user.id}", '1', ex: 1.hour)
 
     UserMailer.failed_2fa(user, request.remote_ip, request.user_agent, Time.now.utc).deliver_later!
   end

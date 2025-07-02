@@ -20,7 +20,6 @@ export type StatusLike = Record<{
   contentHTML: string;
   media_attachments: List<unknown>;
   spoiler_text?: string;
-  account: Record<{ id: string }>;
 }>;
 
 function normalizeHashtag(hashtag: string) {
@@ -196,19 +195,19 @@ export function getHashtagBarForStatus(status: StatusLike) {
 
   return {
     statusContentProps,
-    hashtagBar: (
-      <HashtagBar
-        hashtags={hashtagsInBar}
-        accountId={status.getIn(['account', 'id']) as string}
-      />
-    ),
+    hashtagBar: <HashtagBar hashtags={hashtagsInBar} />,
   };
+}
+
+export function getFeaturedHashtagBar(acct: string, tags: string[]) {
+  return <HashtagBar acct={acct} hashtags={tags} defaultExpanded />;
 }
 
 const HashtagBar: React.FC<{
   hashtags: string[];
-  accountId: string;
-}> = ({ hashtags, accountId }) => {
+  acct?: string;
+  defaultExpanded?: boolean;
+}> = ({ hashtags, acct, defaultExpanded }) => {
   const [expanded, setExpanded] = useState(false);
   const handleClick = useCallback(() => {
     setExpanded(true);
@@ -218,23 +217,23 @@ const HashtagBar: React.FC<{
     return null;
   }
 
-  const revealedHashtags = expanded
-    ? hashtags
-    : hashtags.slice(0, VISIBLE_HASHTAGS);
+  const revealedHashtags =
+    expanded || defaultExpanded
+      ? hashtags
+      : hashtags.slice(0, VISIBLE_HASHTAGS);
 
   return (
     <div className='hashtag-bar'>
       {revealedHashtags.map((hashtag) => (
         <Link
           key={hashtag}
-          to={`/tags/${hashtag}`}
-          data-menu-hashtag={accountId}
+          to={acct ? `/@${acct}/tagged/${hashtag}` : `/tags/${hashtag}`}
         >
           #<span>{hashtag}</span>
         </Link>
       ))}
 
-      {!expanded && hashtags.length > VISIBLE_HASHTAGS && (
+      {!expanded && !defaultExpanded && hashtags.length > VISIBLE_HASHTAGS && (
         <button className='link-button' onClick={handleClick}>
           <FormattedMessage
             id='hashtags.and_other'

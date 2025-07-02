@@ -5,8 +5,8 @@
   $lighten-multiplier: -1
 );
 
-$black: #000; // Black
-$white: #fff; // White
+$black: #000000; // Black
+$white: #ffffff; // White
 $blurple-500: #6364ff; // Brand purple
 $grey-600: hsl(240deg, 8%, 33%); // Trout
 $grey-100: hsl(240deg, 51%, 90%); // Topaz
@@ -42,5 +42,8 @@ $classic-highlight-color: $blurple-500;
   $inverted-text-color: $black,
 
   $action-button-color: hsl(240deg, 16%, 45%),
-  $emojis-requiring-inversion: 'chains'
+  $emojis-requiring-inversion: 'chains',
+
+  $emoji-reaction-color: #dfe5f5,
+  $emoji-reaction-selected-color: #9ac1f2
 );

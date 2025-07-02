@@ -110,7 +110,7 @@ RSpec.shared_examples 'Status::Visibility' do
   describe '.selectable_visibilities' do
     it 'returns options available for default privacy selection' do
       expect(Status.selectable_visibilities)
-        .to match(%w(public unlisted private))
+        .to match(%w(public public_unlisted login unlisted private))
     end
   end
 
@@ -179,6 +179,148 @@ RSpec.shared_examples 'Status::Visibility' do
       before { subject.visibility = :limited }
 
       it { is_expected.to_not be_distributable }
+    end
+  end
+
+  describe '#compute_searchability' do
+    subject { Fabricate(:status, account: account, searchability: status_searchability) }
+
+    let(:account_searchability) { :public }
+    let(:status_searchability) { :public }
+    let(:account_domain) { 'example.com' }
+    let(:silenced_at) { nil }
+    let(:account) { Fabricate(:account, domain: account_domain, searchability: account_searchability, silenced_at: silenced_at) }
+
+    context 'when public-public' do
+      it 'returns public' do
+        expect(subject.compute_searchability).to eq 'public'
+      end
+    end
+
+    context 'when public-public but silenced' do
+      let(:silenced_at) { Time.now.utc }
+
+      it 'returns private' do
+        expect(subject.compute_searchability).to eq 'private'
+      end
+    end
+
+    context 'when public-public_unlisted but silenced' do
+      let(:silenced_at) { Time.now.utc }
+      let(:status_searchability) { :public_unlisted }
+
+      it 'returns private' do
+        expect(subject.compute_searchability).to eq 'private'
+      end
+    end
+
+    context 'when public-public_unlisted' do
+      let(:status_searchability) { :public_unlisted }
+
+      it 'returns public' do
+        expect(subject.compute_searchability).to eq 'public'
+      end
+
+      it 'returns public_unlisted for local' do
+        expect(subject.compute_searchability_local).to eq 'public_unlisted'
+      end
+    end
+
+    context 'when public-private' do
+      let(:status_searchability) { :private }
+
+      it 'returns private' do
+        expect(subject.compute_searchability).to eq 'private'
+      end
+    end
+
+    context 'when public-direct' do
+      let(:status_searchability) { :direct }
+
+      it 'returns direct' do
+        expect(subject.compute_searchability).to eq 'direct'
+      end
+    end
+
+    context 'when private-public' do
+      let(:account_searchability) { :private }
+
+      it 'returns private' do
+        expect(subject.compute_searchability).to eq 'private'
+      end
+    end
+
+    context 'when direct-public' do
+      let(:account_searchability) { :direct }
+
+      it 'returns direct' do
+        expect(subject.compute_searchability).to eq 'direct'
+      end
+    end
+
+    context 'when limited-public' do
+      let(:account_searchability) { :limited }
+
+      it 'returns limited' do
+        expect(subject.compute_searchability).to eq 'limited'
+      end
+    end
+
+    context 'when private-limited' do
+      let(:account_searchability) { :private }
+      let(:status_searchability) { :limited }
+
+      it 'returns limited' do
+        expect(subject.compute_searchability).to eq 'limited'
+      end
+    end
+
+    context 'when private-public of local account' do
+      let(:account_searchability) { :private }
+      let(:account_domain) { nil }
+      let(:status_searchability) { :public }
+
+      it 'returns public' do
+        expect(subject.compute_searchability).to eq 'public'
+      end
+    end
+
+    context 'when direct-public of local account' do
+      let(:account_searchability) { :direct }
+      let(:account_domain) { nil }
+      let(:status_searchability) { :public }
+
+      it 'returns public' do
+        expect(subject.compute_searchability).to eq 'public'
+      end
+    end
+
+    context 'when limited-public of local account' do
+      let(:account_searchability) { :limited }
+      let(:account_domain) { nil }
+      let(:status_searchability) { :public }
+
+      it 'returns public' do
+        expect(subject.compute_searchability).to eq 'public'
+      end
+    end
+
+    context 'when public-public_unlisted of local account' do
+      let(:account_searchability) { :public }
+      let(:account_domain) { nil }
+      let(:status_searchability) { :public_unlisted }
+
+      it 'returns public' do
+        expect(subject.compute_searchability).to eq 'public'
+      end
+
+      it 'returns public_unlisted for local' do
+        expect(subject.compute_searchability_local).to eq 'public_unlisted'
+      end
+
+      it 'returns private for activitypub' do
+        expect(subject.compute_searchability_activitypub).to eq 'private'
+      end
     end
   end
 end

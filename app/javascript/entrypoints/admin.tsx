@@ -1,3 +1,4 @@
+import './public-path';
 import { createRoot } from 'react-dom/client';
 
 import Rails from '@rails/ujs';
@@ -216,25 +217,37 @@ const onChangeRegistrationMode = (target: HTMLSelectElement) => {
       warning_hint.style.display = target.value === 'open' ? 'inline' : 'none';
     });
 
+  const toggleEnabled = (input: HTMLInputElement, value: boolean) => {
+    input.disabled = !value;
+    if (value) {
+      let element: HTMLElement | null = input;
+      do {
+        element.classList.remove('disabled');
+        element = element.parentElement;
+      } while (element && !element.classList.contains('fields-group'));
+    } else {
+      let element: HTMLElement | null = input;
+      do {
+        element.classList.add('disabled');
+        element = element.parentElement;
+      } while (element && !element.classList.contains('fields-group'));
+    }
+  };
+
   document
     .querySelectorAll<HTMLInputElement>(
       'input#form_admin_settings_require_invite_text',
     )
     .forEach((input) => {
-      input.disabled = !enabled;
-      if (enabled) {
-        let element: HTMLElement | null = input;
-        do {
-          element.classList.remove('disabled');
-          element = element.parentElement;
-        } while (element && !element.classList.contains('fields-group'));
-      } else {
-        let element: HTMLElement | null = input;
-        do {
-          element.classList.add('disabled');
-          element = element.parentElement;
-        } while (element && !element.classList.contains('fields-group'));
-      }
+      toggleEnabled(input, enabled);
+    });
+
+  document
+    .querySelectorAll<HTMLInputElement>(
+      '#form_admin_settings_registrations_start_hour, #form_admin_settings_registrations_end_hour, #form_admin_settings_registrations_secondary_start_hour, #form_admin_settings_registrations_secondary_end_hour',
+    )
+    .forEach((input) => {
+      toggleEnabled(input, target.value === 'open');
     });
 };
 
@@ -259,6 +272,66 @@ Rails.delegate(
   },
 );
 
+const addTableRow = (tableId: string) => {
+  const templateElement = document.querySelector(`#${tableId} .template-row`)!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  const tableElement = document.querySelector(`#${tableId} tbody`)!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+  if (
+    typeof templateElement === 'undefined' ||
+    typeof tableElement === 'undefined'
+  )
+    return;
+
+  let temporaryId = 0;
+  tableElement
+    .querySelectorAll<HTMLInputElement>('.temporary_id')
+    .forEach((input) => {
+      if (parseInt(input.value) + 1 > temporaryId) {
+        temporaryId = parseInt(input.value) + 1;
+      }
+    });
+
+  const cloned = templateElement.cloneNode(true) as HTMLTableRowElement;
+  cloned.className = '';
+  cloned.querySelector<HTMLInputElement>('.temporary_id')!.value = // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    temporaryId.toString();
+  cloned
+    .querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+    .forEach((input) => {
+      input.value = temporaryId.toString();
+    });
+  tableElement.appendChild(cloned);
+};
+
+const removeTableRow = (target: EventTarget | null, tableId: string) => {
+  const tableRowElement = (target as HTMLElement).closest('tr') as Node;
+  const tableElement = document.querySelector(`#${tableId} tbody`)!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+  if (
+    typeof tableRowElement === 'undefined' ||
+    typeof tableElement === 'undefined'
+  )
+    return;
+
+  tableElement.removeChild(tableRowElement);
+};
+
+const setupTableList = (id: string) => {
+  Rails.delegate(document, `#${id} .add-row-button`, 'click', (ev) => {
+    ev.preventDefault();
+    addTableRow(id);
+  });
+
+  Rails.delegate(document, `#${id} .delete-row-button`, 'click', (ev) => {
+    ev.preventDefault();
+    removeTableRow(ev.target, id);
+  });
+};
+
+setupTableList('sensitive-words-table');
+setupTableList('ng-words-table');
+setupTableList('white-list-table');
+
 async function mountReactComponent(element: Element) {
   const componentName = element.getAttribute('data-admin-component');
   const stringProps = element.getAttribute('data-props');
@@ -272,7 +345,7 @@ async function mountReactComponent(element: Element) {
   );
 
   const { default: Component } = (await import(
-    `@/mastodon/components/admin/${componentName}.jsx`
+    `@/mastodon/components/admin/${componentName}`
   )) as { default: React.ComponentType };
 
   const root = createRoot(element);

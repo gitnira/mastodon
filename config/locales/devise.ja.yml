@@ -94,6 +94,7 @@ ja:
       updated_not_active: パスワードは正常に更新されました。
     registrations:
       destroyed: アカウントの作成はキャンセルされました。またのご利用をお待ちしています。
+      sign_up_failed_because_reach_limit: 制限に到達しているため、アカウントを作成できません。
       update_needs_confirmation: アカウント情報の更新に成功しました。しかし、メールアドレスの確認が必要です。送信されたメール内のリンクをクリックしてメールアドレスを確認してください。
       updated: アカウント情報の更新に成功しました。
     sessions:

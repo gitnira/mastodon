@@ -26,8 +26,19 @@ module FormattingHelper
   end
   module_function :extract_status_plain_text
 
+  def extract_status_plain_text_with_spoiler_text(status)
+    PlainTextFormatter.new("#{status.spoiler_text}\n#{status.text}", status.local?).to_s
+  end
+
   def status_content_format(status)
-    html_aware_format(status.text, status.local?, preloaded_accounts: [status.account] + (status.respond_to?(:active_mentions) ? status.active_mentions.map(&:account) : []))
+    MastodonOTELTracer.in_span('HtmlAwareFormatter rendering') do |span|
+      span.add_attributes(
+        'app.formatter.content.type' => 'status',
+        'app.formatter.content.origin' => status.local? ? 'local' : 'remote'
+      )
+
+      html_aware_format(status.text, status.local?, markdown: status.markdown, preloaded_accounts: [status.account] + (status.respond_to?(:active_mentions) ? status.active_mentions.map(&:account) : []))
+    end
   end
 
   def rss_status_content_format(status)
@@ -39,14 +50,21 @@ module FormattingHelper
   end
 
   def account_bio_format(account)
-    html_aware_format(account.note, account.local?)
+    MastodonOTELTracer.in_span('HtmlAwareFormatter rendering') do |span|
+      span.add_attributes(
+        'app.formatter.content.type' => 'account_bio',
+        'app.formatter.content.origin' => account.local? ? 'local' : 'remote'
+      )
+
+      html_aware_format(account.note, account.local?, markdown: account.user&.setting_bio_markdown)
+    end
   end
 
   def account_field_value_format(field, with_rel_me: true)
     if field.verified? && !field.account.local?
       TextFormatter.shortened_link(field.value_for_verification)
     else
-      html_aware_format(field.value, field.account.local?, with_rel_me: with_rel_me, with_domains: true, multiline: false)
+      html_aware_format(field.value, field.account.local?, markdown: false, with_rel_me: with_rel_me, with_domains: true, multiline: false)
     end
   end
 

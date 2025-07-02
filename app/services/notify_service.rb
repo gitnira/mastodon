@@ -9,7 +9,10 @@ class NotifyService < BaseService
     admin.sign_up
     update
     poll
+    emoji_reaction
+    status_reference
     status
+    list_status
     moderation_warning
     severed_relationships
     annual_report

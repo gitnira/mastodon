@@ -12,12 +12,14 @@ type ShortNumberRenderer = (
 
 interface ShortNumberProps {
   value: number;
+  isHide?: boolean;
   renderer?: ShortNumberRenderer;
   children?: ShortNumberRenderer;
 }
 
 export const ShortNumberRenderer: React.FC<ShortNumberProps> = ({
   value,
+  isHide,
   renderer,
   children,
 }) => {
@@ -32,7 +34,11 @@ export const ShortNumberRenderer: React.FC<ShortNumberProps> = ({
 
   const customRenderer = children ?? renderer ?? null;
 
-  const displayNumber = <ShortNumberCounter value={shortNumber} />;
+  const displayNumber = !isHide ? (
+    <ShortNumberCounter value={shortNumber} />
+  ) : (
+    <span>-</span>
+  );
 
   return (
     customRenderer?.(displayNumber, pluralReady(value, division)) ??

@@ -22,6 +22,7 @@ RSpec.describe Admin::ExportDomainBlocksController do
       Fabricate(:domain_block, domain: 'bad.domain', severity: 'silence', public_comment: 'bad server')
       Fabricate(:domain_block, domain: 'worse.domain', severity: 'suspend', reject_media: true, reject_reports: true, public_comment: 'worse server', obfuscate: true)
       Fabricate(:domain_block, domain: 'reject.media', severity: 'noop', reject_media: true, public_comment: 'reject media and test unicode characters ♥')
+      Fabricate(:domain_block, domain: 'little.spam', severity: 'noop', public_comment: 'has some spams', reject_favourite: true, reject_straight_follow: true)
       Fabricate(:domain_block, domain: 'no.op', severity: 'noop', public_comment: 'noop')
 
       get :export, params: { format: :csv }
@@ -42,8 +43,17 @@ RSpec.describe Admin::ExportDomainBlocksController do
         post :import, params: { admin_import: { data: fixture_file_upload('domain_blocks.csv') } }
       end
 
+      it 'renders page with extended domain blocks' do
+        expect(mapped_batch_table_rows_with_expanded_params).to contain_exactly(
+          ['bad.domain', false],
+          ['worse.domain', false],
+          ['reject.media', false],
+          ['little.spam', true]
+        )
+      end
+
       it 'renders page with expected domain blocks and returns http success' do
-        expect(mapped_batch_table_rows).to contain_exactly(['bad.domain', :silence], ['worse.domain', :suspend], ['reject.media', :noop])
+        expect(mapped_batch_table_rows).to contain_exactly(['bad.domain', :silence], ['worse.domain', :suspend], ['reject.media', :noop], ['little.spam', :noop])
         expect(response).to have_http_status(200)
       end
     end
@@ -61,6 +71,10 @@ RSpec.describe Admin::ExportDomainBlocksController do
 
     def mapped_batch_table_rows
       batch_table_rows.map { |row| [row.at_css('[id$=_domain]')['value'], row.at_css('[id$=_severity]')['value'].to_sym] }
+    end
+
+    def mapped_batch_table_rows_with_expanded_params
+      batch_table_rows.map { |row| [row.at_css('[id$=_domain]')['value'], row.at_css('[id$=_reject_favourite]')['value'] == 'true'] }
     end
 
     def batch_table_rows

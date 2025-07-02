@@ -40,6 +40,7 @@ RSpec.describe ActivityPub::FetchRemoteAccountService do
 
         stub_request(:get, 'https://example.com/alice').to_return(body: Oj.dump(actor), headers: { 'Content-Type': 'application/activity+json' })
         stub_request(:get, 'https://example.com/.well-known/webfinger?resource=acct:alice@example.com').to_return(body: Oj.dump(webfinger), headers: { 'Content-Type': 'application/jrd+json' })
+        stub_request(:get, 'https://example.com/.well-known/nodeinfo').to_return(body: '{}')
       end
 
       it 'fetches resource and looks up webfinger and returns nil' do
@@ -56,6 +57,7 @@ RSpec.describe ActivityPub::FetchRemoteAccountService do
       before do
         stub_request(:get, 'https://example.com/alice').to_return(body: Oj.dump(actor), headers: { 'Content-Type': 'application/activity+json' })
         stub_request(:get, 'https://example.com/.well-known/webfinger?resource=acct:alice@example.com').to_return(body: Oj.dump(webfinger), headers: { 'Content-Type': 'application/jrd+json' })
+        stub_request(:get, 'https://example.com/.well-known/nodeinfo').to_return(body: '{}')
       end
 
       it 'fetches resource and looks up webfinger and sets attributes' do
@@ -68,7 +70,7 @@ RSpec.describe ActivityPub::FetchRemoteAccountService do
         expect(account.domain).to eq 'example.com'
       end
 
-      it_behaves_like 'sets profile data'
+      include_examples 'sets profile data'
     end
 
     context 'when WebFinger presents different domain than URI' do
@@ -78,6 +80,7 @@ RSpec.describe ActivityPub::FetchRemoteAccountService do
         stub_request(:get, 'https://example.com/alice').to_return(body: Oj.dump(actor), headers: { 'Content-Type': 'application/activity+json' })
         stub_request(:get, 'https://example.com/.well-known/webfinger?resource=acct:alice@example.com').to_return(body: Oj.dump(webfinger), headers: { 'Content-Type': 'application/jrd+json' })
         stub_request(:get, 'https://iscool.af/.well-known/webfinger?resource=acct:alice@iscool.af').to_return(body: Oj.dump(webfinger), headers: { 'Content-Type': 'application/jrd+json' })
+        stub_request(:get, 'https://iscool.af/.well-known/nodeinfo').to_return(body: '{}')
       end
 
       it 'fetches resource and looks up webfinger and follows redirection and sets attributes' do
@@ -91,7 +94,7 @@ RSpec.describe ActivityPub::FetchRemoteAccountService do
         expect(account.domain).to eq 'iscool.af'
       end
 
-      it_behaves_like 'sets profile data'
+      include_examples 'sets profile data'
     end
 
     context 'when WebFinger returns a different URI' do
@@ -100,6 +103,7 @@ RSpec.describe ActivityPub::FetchRemoteAccountService do
       before do
         stub_request(:get, 'https://example.com/alice').to_return(body: Oj.dump(actor), headers: { 'Content-Type': 'application/activity+json' })
         stub_request(:get, 'https://example.com/.well-known/webfinger?resource=acct:alice@example.com').to_return(body: Oj.dump(webfinger), headers: { 'Content-Type': 'application/jrd+json' })
+        stub_request(:get, 'https://example.com/.well-known/nodeinfo').to_return(body: '{}')
       end
 
       it 'fetches resource and looks up webfinger and does not create account' do
@@ -117,6 +121,7 @@ RSpec.describe ActivityPub::FetchRemoteAccountService do
         stub_request(:get, 'https://example.com/alice').to_return(body: Oj.dump(actor), headers: { 'Content-Type': 'application/activity+json' })
         stub_request(:get, 'https://example.com/.well-known/webfinger?resource=acct:alice@example.com').to_return(body: Oj.dump(webfinger), headers: { 'Content-Type': 'application/jrd+json' })
         stub_request(:get, 'https://iscool.af/.well-known/webfinger?resource=acct:alice@iscool.af').to_return(body: Oj.dump(webfinger), headers: { 'Content-Type': 'application/jrd+json' })
+        stub_request(:get, 'https://iscool.af/.well-known/nodeinfo').to_return(body: '{}')
       end
 
       it 'fetches resource and looks up webfinger and follows redirect and does not create account' do

@@ -43,6 +43,8 @@ class AccountSearchService < BaseService
     def must_clauses
       if @account && @options[:following]
         [core_query, only_following_query]
+      elsif @account && @options[:follower]
+        [core_query, only_follower_query]
       else
         [core_query]
       end
@@ -53,7 +55,7 @@ class AccountSearchService < BaseService
     end
 
     def should_clauses
-      if @account && !@options[:following]
+      if @account && !@options[:following] && !@options[:follower]
         [boost_following_query]
       else
         []
@@ -79,6 +81,14 @@ class AccountSearchService < BaseService
       }
     end
 
+    def only_follower_query
+      {
+        terms: {
+          id: follower_ids,
+        },
+      }
+    end
+
     # This function promotes accounts that have more followers
     def followers_score_function
       {
@@ -92,6 +102,10 @@ class AccountSearchService < BaseService
 
     def following_ids
       @following_ids ||= @account.active_relationships.pluck(:target_account_id) + [@account.id]
+    end
+
+    def follower_ids
+      @follower_ids ||= @account.passive_relationships.pluck(:account_id)
     end
   end
 
@@ -128,37 +142,11 @@ class AccountSearchService < BaseService
 
     def core_query
       {
-        dis_max: {
-          queries: [
-            {
-              match: {
-                username: {
-                  query: @query,
-                  analyzer: 'word_join_analyzer',
-                },
-              },
-            },
-
-            {
-              match: {
-                display_name: {
-                  query: @query,
-                  analyzer: 'word_join_analyzer',
-                },
-              },
-            },
-
-            {
-              multi_match: {
-                query: @query,
-                type: 'best_fields',
-                fields: %w(text text.*),
-                operator: 'and',
-              },
-            },
-          ],
-
-          tie_breaker: 0.5,
+        multi_match: {
+          query: @query,
+          type: 'best_fields',
+          fields: %w(username^2 display_name^2 text text.*),
+          operator: 'and',
         },
       }
     end
@@ -177,12 +165,6 @@ class AccountSearchService < BaseService
         'search.limit' => @limit,
         'search.backend' => Chewy.enabled? ? 'elasticsearch' : 'database'
       )
-
-      # Trigger searching accounts using providers.
-      # This will not return any immediate results but has the
-      # potential to fill the local database with relevant
-      # accounts for the next time the search is performed.
-      Fasp::AccountSearchWorker.perform_async(@query) if options[:query_fasp]
 
       search_service_results.compact.uniq.tap do |results|
         span.set_attribute('search.results.count', results.size)
@@ -212,6 +194,7 @@ class AccountSearchService < BaseService
             end
 
     match = nil if !match.nil? && !account.nil? && options[:following] && !account.following?(match)
+    match = nil if !match.nil? && !account.nil? && options[:follower] && !match.following?(account)
 
     @exact_match = match
   end
@@ -235,7 +218,7 @@ class AccountSearchService < BaseService
   end
 
   def advanced_search_results
-    Account.advanced_search_for(terms_for_query, account, limit: limit_for_non_exact_results, following: options[:following], offset: offset)
+    Account.advanced_search_for(terms_for_query, account, limit: limit_for_non_exact_results, following: options[:following], follower: options[:follower], offset: offset)
   end
 
   def simple_search_results
@@ -245,9 +228,9 @@ class AccountSearchService < BaseService
   def from_elasticsearch
     query_builder = begin
       if options[:use_searchable_text]
-        FullQueryBuilder.new(terms_for_query, account, options.slice(:following))
+        FullQueryBuilder.new(terms_for_query, account, options.slice(:following, :follower))
       else
-        AutocompleteQueryBuilder.new(terms_for_query, account, options.slice(:following))
+        AutocompleteQueryBuilder.new(terms_for_query, account, options.slice(:following, :follower))
       end
     end
 

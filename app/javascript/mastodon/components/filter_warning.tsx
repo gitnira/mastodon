@@ -12,13 +12,15 @@ export const FilterWarning: React.FC<{
     onClick={onClick}
     variant={BannerVariant.Filter}
   >
-    <FormattedMessage
-      id='filter_warning.matches_filter'
-      defaultMessage='Matches filter “<span>{title}</span>”'
-      values={{
-        title,
-        span: (chunks) => <span className='filter-name'>{chunks}</span>,
-      }}
-    />
+    <p>
+      <FormattedMessage
+        id='filter_warning.matches_filter'
+        defaultMessage='Matches filter “<span>{title}</span>”'
+        values={{
+          title,
+          span: (chunks) => <span className='filter-name'>{chunks}</span>,
+        }}
+      />
+    </p>
   </StatusBanner>
 );

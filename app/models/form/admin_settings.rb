@@ -14,6 +14,13 @@ class Form::AdminSettings
     site_terms
     registrations_mode
     closed_registrations_message
+    registration_button_message
+    registrations_limit
+    registrations_limit_per_day
+    registrations_start_hour
+    registrations_end_hour
+    registrations_secondary_start_hour
+    registrations_secondary_end_hour
     timeline_preview
     bootstrap_timeline_accounts
     theme
@@ -29,15 +36,33 @@ class Form::AdminSettings
     trendable_by_default
     show_domain_blocks
     show_domain_blocks_rationale
-    allow_referrer_origin
     noindex
     require_invite_text
     media_cache_retention_period
     content_cache_retention_period
     backups_retention_period
+    delete_content_cache_without_reaction
     status_page_url
     captcha_enabled
+    stranger_mention_from_local_ng
+    post_hash_tags_max
+    post_mentions_max
+    post_stranger_mentions_max
+    auto_warning_text
     authorized_fetch
+    receive_other_servers_emoji_reaction
+    streaming_other_servers_emoji_reaction
+    streaming_local_emoji_reaction
+    enable_emoji_reaction
+    check_lts_version_only
+    enable_public_visibility
+    enable_public_unlisted_visibility
+    unlocked_friend
+    enable_local_timeline
+    emoji_reaction_disallow_domains
+    hold_remote_new_accounts
+    stop_fetch_activity_domains
+    stop_link_preview_domains
     app_icon
     favicon
     min_age
@@ -47,11 +72,19 @@ class Form::AdminSettings
     media_cache_retention_period
     content_cache_retention_period
     backups_retention_period
+    post_hash_tags_max
+    post_mentions_max
+    post_stranger_mentions_max
+    registrations_limit
+    registrations_limit_per_day
+    registrations_start_hour
+    registrations_end_hour
+    registrations_secondary_start_hour
+    registrations_secondary_end_hour
     min_age
   ).freeze
 
   BOOLEAN_KEYS = %i(
-    allow_referrer_origin
     timeline_preview
     activity_api_enabled
     peers_api_enabled
@@ -64,6 +97,18 @@ class Form::AdminSettings
     require_invite_text
     captcha_enabled
     authorized_fetch
+    receive_other_servers_emoji_reaction
+    streaming_other_servers_emoji_reaction
+    streaming_local_emoji_reaction
+    enable_emoji_reaction
+    check_lts_version_only
+    enable_public_visibility
+    enable_public_unlisted_visibility
+    unlocked_friend
+    stranger_mention_from_local_ng
+    enable_local_timeline
+    delete_content_cache_without_reaction
+    hold_remote_new_accounts
   ).freeze
 
   UPLOAD_KEYS = %i(
@@ -81,13 +126,18 @@ class Form::AdminSettings
     authorized_fetch: :authorized_fetch_mode?,
   }.freeze
 
+  STRING_ARRAY_KEYS = %i(
+    emoji_reaction_disallow_domains
+    stop_fetch_activity_domains
+    stop_link_preview_domains
+  ).freeze
+
   DESCRIPTION_LIMIT = 200
 
   attr_accessor(*KEYS)
 
   validates :registrations_mode, inclusion: { in: %w(open approved none) }, if: -> { defined?(@registrations_mode) }
-  validates :site_contact_email, :site_contact_username, presence: true, if: -> { defined?(@site_contact_username) || defined?(@site_contact_email) }
-  validates :site_contact_username, existing_username: true, if: -> { defined?(@site_contact_username) }
+  validates :site_contact_username, presence: true, existing_username: true, if: -> { defined?(@site_contact_username) }
   validates :bootstrap_timeline_accounts, existing_username: { multiple: true }, if: -> { defined?(@bootstrap_timeline_accounts) }
   validates :show_domain_blocks, inclusion: { in: %w(disabled users all) }, if: -> { defined?(@show_domain_blocks) }
   validates :show_domain_blocks_rationale, inclusion: { in: %w(disabled users all) }, if: -> { defined?(@show_domain_blocks_rationale) }
@@ -103,6 +153,8 @@ class Form::AdminSettings
 
       stored_value = if UPLOAD_KEYS.include?(key)
                        SiteUpload.where(var: key).first_or_initialize(var: key)
+                     elsif STRING_ARRAY_KEYS.include?(key)
+                       Setting.public_send(key)&.join("\n") || ''
                      elsif OVERRIDEN_SETTINGS.include?(key)
                        public_send(OVERRIDEN_SETTINGS[key])
                      else
@@ -161,6 +213,8 @@ class Form::AdminSettings
       value == '1'
     elsif INTEGER_KEYS.include?(key)
       value.blank? ? value : Integer(value)
+    elsif STRING_ARRAY_KEYS.include?(key)
+      value&.split(/\r\n|\r|\n/)&.filter(&:present?)&.uniq || []
     else
       value
     end

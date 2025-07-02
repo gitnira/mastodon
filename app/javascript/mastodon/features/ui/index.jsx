@@ -29,9 +29,8 @@ import { expandHomeTimeline } from '../../actions/timelines';
 import initialState, { me, owner, singleUserMode, trendsEnabled, trendsAsLanding, disableHoverCards } from '../../initial_state';
 
 import BundleColumnError from './components/bundle_column_error';
-import { NavigationBar } from './components/navigation_bar';
+import Header from './components/header';
 import { UploadArea } from './components/upload_area';
-import { HashtagMenuController } from './components/hashtag_menu_controller';
 import ColumnsAreaContainer from './containers/columns_area_container';
 import LoadingBarContainer from './containers/loading_bar_container';
 import ModalContainer from './containers/modal_container';
@@ -48,14 +47,21 @@ import {
   Following,
   Reblogs,
   Favourites,
+  EmojiReactions,
+  StatusReferences,
+  MentionedUsers,
   DirectTimeline,
   HashtagTimeline,
+  AntennaTimeline,
   Notifications,
   NotificationRequests,
   NotificationRequest,
   FollowRequests,
   FavouritedStatuses,
+  EmojiReactedStatuses,
   BookmarkedStatuses,
+  BookmarkCategories,
+  BookmarkCategoryStatuses,
   FollowedTags,
   LinkTimeline,
   ListTimeline,
@@ -66,6 +72,10 @@ import {
   DomainBlocks,
   Mutes,
   PinnedStatuses,
+  Antennas,
+  Circles,
+  CircleStatuses,
+  AntennaSetting,
   Directory,
   OnboardingProfile,
   OnboardingFollows,
@@ -73,8 +83,14 @@ import {
   Search,
   About,
   PrivacyPolicy,
+  CommunityTimeline,
+  AntennaEdit,
+  AntennaMembers,
+  CircleEdit,
+  CircleMembers,
+  BookmarkCategoryEdit,
+  ReactionDeck,
   TermsOfService,
-  AccountFeatured,
 } from './util/async-components';
 import { ColumnsContextProvider } from './util/columns_context';
 import { WrappedSwitch, WrappedRoute } from './util/react_router_helpers';
@@ -121,6 +137,7 @@ const keyMap = {
   goToDirect: 'g d',
   goToStart: 'g s',
   goToFavourites: 'g f',
+  goToEmojiReactions: 'g e',
   goToPinned: 'g p',
   goToProfile: 'g u',
   goToBlocked: 'g b',
@@ -142,8 +159,13 @@ class SwitchingColumnsArea extends PureComponent {
   };
 
   UNSAFE_componentWillMount () {
-    document.body.classList.toggle('layout-single-column', this.props.singleColumn);
-    document.body.classList.toggle('layout-multiple-columns', !this.props.singleColumn);
+    if (this.props.singleColumn) {
+      document.body.classList.toggle('layout-single-column', true);
+      document.body.classList.toggle('layout-multiple-columns', false);
+    } else {
+      document.body.classList.toggle('layout-single-column', false);
+      document.body.classList.toggle('layout-multiple-columns', true);
+    }
   }
 
   componentDidUpdate (prevProps) {
@@ -195,8 +217,8 @@ class SwitchingColumnsArea extends PureComponent {
             {singleColumn ? <Redirect from='/deck' to='/home' exact /> : null}
             {singleColumn && pathName.startsWith('/deck/') ? <Redirect from={pathName} to={{...this.props.location, pathname: pathName.slice(5)}} /> : null}
             {/* Redirect old bookmarks (without /deck) with home-like routes to the advanced interface */}
+            {!singleColumn && pathName === '/getting-started' ? <Redirect from='/getting-started' to='/deck/getting-started' exact /> : null}
             {!singleColumn && pathName === '/home' ? <Redirect from='/home' to='/deck/getting-started' exact /> : null}
-            {pathName === '/getting-started' ? <Redirect from='/getting-started' to={singleColumn ? '/home' : '/deck/getting-started'} exact /> : null}
 
             <WrappedRoute path='/getting-started' component={GettingStarted} content={children} />
             <WrappedRoute path='/keyboard-shortcuts' component={KeyboardShortcuts} content={children} />
@@ -210,6 +232,7 @@ class SwitchingColumnsArea extends PureComponent {
             <WrappedRoute path='/public' exact component={Firehose} componentParams={{ feedType: 'public' }} content={children} />
             <WrappedRoute path='/public/local' exact component={Firehose} componentParams={{ feedType: 'community' }} content={children} />
             <WrappedRoute path='/public/remote' exact component={Firehose} componentParams={{ feedType: 'public:remote' }} content={children} />
+            <WrappedRoute path='/public/local/fixed' exact component={CommunityTimeline} content={children} />
             <WrappedRoute path={['/conversations', '/timelines/direct']} component={DirectTimeline} content={children} />
             <WrappedRoute path='/tags/:id' component={HashtagTimeline} content={children} />
             <WrappedRoute path='/links/:url' component={LinkTimeline} content={children} />
@@ -217,13 +240,29 @@ class SwitchingColumnsArea extends PureComponent {
             <WrappedRoute path='/lists/:id/edit' component={ListEdit} content={children} />
             <WrappedRoute path='/lists/:id/members' component={ListMembers} content={children} />
             <WrappedRoute path='/lists/:id' component={ListTimeline} content={children} />
+            <WrappedRoute path='/antennas/new' component={AntennaEdit} content={children} />
+            <WrappedRoute path='/antennas/:id/edit' component={AntennaEdit} content={children} />
+            <WrappedRoute path='/antennas/:id/members' component={AntennaMembers} content={children} />
+            <WrappedRoute path='/antennas/:id/exclude_members' component={AntennaMembers} componentParams={{ isExclude: true }} content={children} />
+            <WrappedRoute path='/antennas/:id/filtering' component={AntennaSetting} content={children} />
+            <WrappedRoute path='/antennas/:id' component={AntennaTimeline} content={children} />
+            <WrappedRoute path='/circles/new' component={CircleEdit} content={children} />
+            <WrappedRoute path='/circles/:id/edit' component={CircleEdit} content={children} />
+            <WrappedRoute path='/circles/:id/members' component={CircleMembers} content={children} />
+            <WrappedRoute path='/circles/:id' component={CircleStatuses} content={children} />
+            <WrappedRoute path='/bookmark_categories/new' component={BookmarkCategoryEdit} content={children} />
+            <WrappedRoute path='/bookmark_categories/:id/edit' component={BookmarkCategoryEdit} content={children} />
+            <WrappedRoute path='/bookmark_categories/:id' component={BookmarkCategoryStatuses} content={children} />
             <WrappedRoute path='/notifications' component={Notifications} content={children} exact />
             <WrappedRoute path='/notifications/requests' component={NotificationRequests} content={children} exact />
             <WrappedRoute path='/notifications/requests/:id' component={NotificationRequest} content={children} exact />
             <WrappedRoute path='/favourites' component={FavouritedStatuses} content={children} />
+            <WrappedRoute path='/emoji_reactions' component={EmojiReactedStatuses} content={children} />
 
             <WrappedRoute path='/bookmarks' component={BookmarkedStatuses} content={children} />
             <WrappedRoute path='/pinned' component={PinnedStatuses} content={children} />
+            
+            <WrappedRoute path='/reaction_deck' component={ReactionDeck} content={children} />
 
             <WrappedRoute path={['/start', '/start/profile']} exact component={OnboardingProfile} content={children} />
             <WrappedRoute path='/start/follows' component={OnboardingFollows} content={children} />
@@ -233,7 +272,6 @@ class SwitchingColumnsArea extends PureComponent {
             <WrappedRoute path={['/publish', '/statuses/new']} component={Compose} content={children} />
 
             <WrappedRoute path={['/@:acct', '/accounts/:id']} exact component={AccountTimeline} content={children} />
-            <WrappedRoute path={['/@:acct/featured', '/accounts/:id/featured']} component={AccountFeatured} content={children} />
             <WrappedRoute path='/@:acct/tagged/:tagged?' exact component={AccountTimeline} content={children} />
             <WrappedRoute path={['/@:acct/with_replies', '/accounts/:id/with_replies']} component={AccountTimeline} content={children} componentParams={{ withReplies: true }} />
             <WrappedRoute path={['/accounts/:id/followers', '/users/:acct/followers', '/@:acct/followers']} component={Followers} content={children} />
@@ -242,6 +280,9 @@ class SwitchingColumnsArea extends PureComponent {
             <WrappedRoute path='/@:acct/:statusId' exact component={Status} content={children} />
             <WrappedRoute path='/@:acct/:statusId/reblogs' component={Reblogs} content={children} />
             <WrappedRoute path='/@:acct/:statusId/favourites' component={Favourites} content={children} />
+            <WrappedRoute path='/@:acct/:statusId/emoji_reactions' component={EmojiReactions} content={children} />
+            <WrappedRoute path='/@:acct/:statusId/references' component={StatusReferences} content={children} />
+            <WrappedRoute path='/@:acct/:statusId/mentioned_users' component={MentionedUsers} content={children} />
 
             {/* Legacy routes, cannot be easily factored with other routes because they share a param name */}
             <WrappedRoute path='/timelines/tag/:id' component={HashtagTimeline} content={children} />
@@ -249,6 +290,8 @@ class SwitchingColumnsArea extends PureComponent {
             <WrappedRoute path='/statuses/:statusId' exact component={Status} content={children} />
             <WrappedRoute path='/statuses/:statusId/reblogs' component={Reblogs} content={children} />
             <WrappedRoute path='/statuses/:statusId/favourites' component={Favourites} content={children} />
+            <WrappedRoute path='/statuses/:statusId/emoji_reactions' component={EmojiReactions} content={children} />
+            <WrappedRoute path='/statuses/:statusId/references' component={StatusReferences} content={children} />
 
             <WrappedRoute path='/follow_requests' component={FollowRequests} content={children} />
             <WrappedRoute path='/blocks' component={Blocks} content={children} />
@@ -256,6 +299,9 @@ class SwitchingColumnsArea extends PureComponent {
             <WrappedRoute path='/followed_tags' component={FollowedTags} content={children} />
             <WrappedRoute path='/mutes' component={Mutes} content={children} />
             <WrappedRoute path='/lists' component={Lists} content={children} />
+            <WrappedRoute path='/antennas' component={Antennas} content={children} />
+            <WrappedRoute path='/circles' component={Circles} content={children} />
+            <WrappedRoute path='/bookmark_categories' component={BookmarkCategories} content={children} />
 
             <Route component={BundleColumnError} />
           </WrappedSwitch>
@@ -452,7 +498,7 @@ class UI extends PureComponent {
   handleHotkeyNew = e => {
     e.preventDefault();
 
-    const element = this.node.querySelector('.autosuggest-textarea__textarea');
+    const element = this.node.querySelector('.compose-form__scrollable .autosuggest-textarea__textarea');
 
     if (element) {
       element.focus();
@@ -549,6 +595,10 @@ class UI extends PureComponent {
     this.props.history.push('/favourites');
   };
 
+  handleHotkeyGoToEmojiReactions = () => {
+    this.props.history.push('/emoji_reactions');
+  };
+
   handleHotkeyGoToPinned = () => {
     this.props.history.push('/pinned');
   };
@@ -588,6 +638,7 @@ class UI extends PureComponent {
       goToDirect: this.handleHotkeyGoToDirect,
       goToStart: this.handleHotkeyGoToStart,
       goToFavourites: this.handleHotkeyGoToFavourites,
+      goToEmojiReactions: this.handleHotkeyGoToEmojiReactions,
       goToPinned: this.handleHotkeyGoToPinned,
       goToProfile: this.handleHotkeyGoToProfile,
       goToBlocked: this.handleHotkeyGoToBlocked,
@@ -598,15 +649,15 @@ class UI extends PureComponent {
     return (
       <HotKeys keyMap={keyMap} handlers={handlers} ref={this.setHotkeysRef} attach={window} focused>
         <div className={classNames('ui', { 'is-composing': isComposing })} ref={this.setRef}>
+          <Header />
+
           <SwitchingColumnsArea identity={this.props.identity} location={location} singleColumn={layout === 'mobile' || layout === 'single-column'} forceOnboarding={firstLaunch && newAccount}>
             {children}
           </SwitchingColumnsArea>
 
-          <NavigationBar />
           {layout !== 'mobile' && <PictureInPicture />}
           <AlertsController />
           {!disableHoverCards && <HoverCardController />}
-          <HashtagMenuController />
           <LoadingBarContainer className='loading-bar' />
           <ModalContainer />
           <UploadArea active={draggingOver} onClose={this.closeUploadModal} />

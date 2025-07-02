@@ -121,15 +121,10 @@ export const clickSearchResult = createAppAsyncThunk(
 
 export const forgetSearchResult = createAppAsyncThunk(
   'search/forgetResult',
-  (
-    { q, type }: { q: string; type?: RecentSearchType },
-    { dispatch, getState },
-  ) => {
+  (q: string, { dispatch, getState }) => {
     const previous = getState().search.recent;
     const me = getState().meta.get('me') as string;
-    const current = previous.filter(
-      (result) => result.q !== q || result.type !== type,
-    );
+    const current = previous.filter((result) => result.q !== q);
 
     searchHistory.set(me, current);
     dispatch(updateSearchHistory(current));

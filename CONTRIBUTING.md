@@ -1,91 +1,35 @@
-# Contributing
+# CONTRIBUTING
 
-Thank you for considering contributing to Mastodon 🐘
+kmyblueは、コミュニティの意見も聞くには聞きますが導入する・しないは管理人が決定します。
 
-You can contribute in the following ways:
+## バグ報告
 
-- Finding and reporting bugs
-- Translating the Mastodon interface into various languages
-- Contributing code to Mastodon by fixing bugs or implementing features
-- Improving the documentation
+バグについて、L最新よりも過去のバージョンへの対応は、LTSや特別な場合以外は行いません。
 
-Please review the org-level [contribution guidelines] for high-level acceptance
-criteria guidance and the [DEVELOPMENT] guide for environment-specific details.
+以下のいずれかの方法で報告してください。
 
-## API Changes and Additions
+- [GitHub Issues](https://github.com/kmycode/mastodon/issues) （セキュリティインシデントはここの一番下から）
+- [kmyblue開発者への連絡](https://kmy.blue/@askyq)
+- [kmyblue開発者へのメール](https://kmy.blue/about)
 
-Any changes or additions made to the API should have an accompanying pull
-request on our [documentation repository].
+## 翻訳、プルリクエスト
 
-## Bug Reports
+新しい機能や既存機能の修正については、プルリクエストのためにコードを作成する前に、まずGitHub Issuesで機能の提案を行いkmyblue開発者の考えを聞くことをおすすめします。バグ修正、翻訳、テストコードなどは基本受け入れますが、依存モジュールのバージョンアップについては特別な事情がなければ本家Mastodonよりも先に行かないようにしてください。
 
-Bug reports and feature suggestions must use descriptive and concise titles and
-be submitted to [GitHub Issues]. Please use the search function to make sure
-there are not duplicate bug reports or feature requests.
+プルリクエストのタイトルには、プルリクエストの内容が明確になるようなものを設定してください。
 
-## Security Issues
+### kmyblueの開発方針
 
-If you believe you have identified a security issue in Mastodon or our own apps,
-check [SECURITY].
+下記のものに矛盾がなければ、あとは管理人の意向次第です。
 
-## Translations
+- **自分の投稿を見せたくない人に見せない**
+- **他人の見たくない投稿を見ない**
+- ただし本家Mastodonで上記原則に矛盾した機能が追加された場合は従う
+- 画面を騒がしくするような機能（絵文字を大きく表示するなど）は追加しないか、控えめにする。ただし他のソフトウェアにも導入され利用者が多くいる場合などは別途判断して、オプトアウト可能な設定項目とともに追加する
+- 負荷を著しく上げるような機能はできるだけ追加しない
 
-Translations are community contributed via [Crowdin]. They are periodically
-reviewed and merged into the codebase.
+kmyblueが意図的に実装していない機能は、例えば以下のものがあります。詳しい理由が知りたい場合は[この記事を参照するか](https://note.com/kmycode/n/n463410b5e03c)、別途お問い合わせください。もちろん明確な根拠がある場合、あなたはこれに抗議する権利を有しますが、あなたがこのkmyblueをフォークして新しいリポジトリを作るほうがより自由でしょう。
 
-[![Crowdin](https://d322cqt584bo4o.cloudfront.net/mastodon/localized.svg)](https://crowdin.com/project/mastodon)
-
-## Pull Requests
-
-### Size and Scope
-
-Our time is limited and PRs making large, unsolicited changes are unlikely to
-get a response. Changes which link to an existing confirmed issue, or which come
-from a "help wanted" issue or other request are more likely to be reviewed.
-
-The smaller and more narrowly focused the changes in a PR are, the easier they
-are to review and potentially merge. If the change only makes sense in some
-larger context of future ongoing work, note that in the description, but still
-aim to keep each distinct PR to a "smallest viable change" chunk of work.
-
-### Description of Changes
-
-Unless the Pull Request is about refactoring code, updating dependencies or
-other internal tasks, assume that the audience are not developers, but a
-Mastodon user or server admin, and try to describe it from their perspective.
-
-The final commit in the main branch will carry the title from the PR. The main
-branch is then fed into the changelog and ultimately into release notes. We try
-to follow the [keepachangelog] spec, and while that does not prescribe how
-exactly the entries ought to be named, starting titles using one of the verbs
-"Add", "Change", "Deprecate", "Remove", or "Fix" (present tense) is helpful.
-
-Example:
-
-| Not ideal                            | Better                                                        |
-| ------------------------------------ | ------------------------------------------------------------- |
-| Fixed NoMethodError in RemovalWorker | Fix nil error when removing statuses caused by race condition |
-
-### Technical Requirements
-
-Pull requests that do not pass automated checks on CI may not be reviewed. In
-particular, please keep in mind:
-
-- Unit and integration tests (rspec, vitest)
-- Code style rules (rubocop, eslint)
-- Normalization of locale files (i18n-tasks)
-- Relevant accessibility or performance concerns
-
-## Documentation
-
-The [Mastodon documentation] is a statically generated site that contains guides
-and API docs. Improvements are made via PRs to the [documentation repository].
-
-[contribution guidelines]: https://github.com/mastodon/.github/blob/main/CONTRIBUTING.md
-[Crowdin]: https://crowdin.com/project/mastodon
-[DEVELOPMENT]: docs/DEVELOPMENT.md
-[documentation repository]: https://github.com/mastodon/documentation
-[GitHub Issues]: https://github.com/mastodon/mastodon/issues
-[keepachangelog]: https://keepachangelog.com/en/1.0.0/
-[Mastodon documentation]: https://docs.joinmastodon.org
-[SECURITY]: SECURITY.md
+- お気に入り一覧の公開
+- ブックマーク分類の公開
+- Fedibird、Misskeyにあるような詳細な画面表示オプション

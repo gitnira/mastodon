@@ -169,6 +169,8 @@ export const buildCustomEmojis = (customEmojis) => {
     const shortcode = emoji.get('shortcode');
     const url       = autoPlayGif ? emoji.get('url') : emoji.get('static_url');
     const name      = shortcode.replace(':', '');
+    const aliases   = emoji.get('aliases');
+    const keywords  = aliases ? [name, ...aliases] : [name];
 
     emojis.push({
       id: name,
@@ -176,7 +178,7 @@ export const buildCustomEmojis = (customEmojis) => {
       short_names: [name],
       text: '',
       emoticons: [],
-      keywords: [name],
+      keywords,
       imageUrl: url,
       custom: true,
       customCategory: emoji.get('category'),

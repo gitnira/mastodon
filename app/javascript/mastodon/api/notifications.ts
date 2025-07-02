@@ -6,9 +6,22 @@ import api, {
 } from 'mastodon/api';
 import type {
   ApiNotificationGroupsResultJSON,
+  ApiNotificationGroupJSON,
   ApiNotificationRequestJSON,
   ApiNotificationJSON,
 } from 'mastodon/api_types/notifications';
+import type { ApiStatusJSON } from 'mastodon/api_types/statuses';
+
+const exceptInvalidNotifications = (
+  notifications: ApiNotificationGroupJSON[],
+) => {
+  return notifications.filter((n) => {
+    if ('status' in n) {
+      return (n.status as ApiStatusJSON | null) !== null;
+    }
+    return true;
+  });
+};
 
 export const apiFetchNotifications = async (
   params?: {
@@ -47,7 +60,7 @@ export const apiFetchNotificationGroups = async (params?: {
   return {
     statuses,
     accounts,
-    notifications: notification_groups,
+    notifications: exceptInvalidNotifications(notification_groups),
     links: getLinks(response),
   };
 };

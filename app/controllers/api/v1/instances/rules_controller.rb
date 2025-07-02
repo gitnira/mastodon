@@ -18,6 +18,6 @@ class Api::V1::Instances::RulesController < Api::V1::Instances::BaseController
   private
 
   def set_rules
-    @rules = Rule.ordered.includes(:translations)
+    @rules = Rule.ordered
   end
 end

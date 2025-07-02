@@ -26,8 +26,6 @@ module JsonLdHelper
   # The url attribute can be a string, an array of strings, or an array of objects.
   # The objects could include a mimeType. Not-included mimeType means it's text/html.
   def url_to_href(value, preferred_type = nil)
-    value = [value] if value.is_a?(Hash)
-
     single_value = if value.is_a?(Array) && !value.first.is_a?(String)
                      value.find { |link| preferred_type.nil? || ((link['mimeType'].presence || 'text/html') == preferred_type) }
                    elsif value.is_a?(Array)
@@ -43,15 +41,6 @@ module JsonLdHelper
     end
   end
 
-  def url_to_media_type(value, preferred_type = nil)
-    value = [value] if value.is_a?(Hash)
-    return unless value.is_a?(Array) && !value.first.is_a?(String)
-
-    single_value = value.find { |link| preferred_type.nil? || ((link['mimeType'].presence || 'text/html') == preferred_type) }
-
-    single_value['mediaType'] unless single_value.nil?
-  end
-
   def as_array(value)
     if value.nil?
       []
@@ -59,6 +48,14 @@ module JsonLdHelper
       value
     else
       [value]
+    end
+  end
+
+  def as_array_ex(value)
+    if value.is_a?(Hash)
+      []
+    else
+      as_array(value)
     end
   end
 
@@ -81,18 +78,6 @@ module JsonLdHelper
     haystack = Addressable::URI.parse(base_url).host
 
     !haystack.casecmp(needle).zero?
-  end
-
-  def safe_prefetched_embed(account, object, context)
-    return unless object.is_a?(Hash)
-
-    # NOTE: Replacing the object's context by that of the parent activity is
-    # not sound, but it's consistent with the rest of the codebase
-    object = object.merge({ '@context' => context })
-
-    return if value_or_id(first_of_value(object['attributedTo'])) != account.uri || non_matching_uri_hosts?(account.uri, object['id'])
-
-    object
   end
 
   def canonicalize(json)
@@ -134,7 +119,7 @@ module JsonLdHelper
         patch_for_forwarding!(value, compacted_value)
       elsif value.is_a?(Array)
         compacted_value = [compacted_value] unless compacted_value.is_a?(Array)
-        return if value.size != compacted_value.size
+        next if value.size != compacted_value.size
 
         compacted[key] = value.zip(compacted_value).map do |v, vc|
           if v.is_a?(Hash) && vc.is_a?(Hash)

@@ -13,7 +13,8 @@ module ProfileStories
     @bob = Fabricate(
       :user,
       email: email, password: password, confirmed_at: confirmed_at,
-      account: Fabricate(:account, username: 'bob')
+      account: Fabricate(:account, username: 'bob'),
+      locale: 'en'
     )
 
     Web::Setting.where(user: bob).first_or_initialize(user: bob).update!(data: { introductionVersion: 2018_12_16_044202 }) if finished_onboarding

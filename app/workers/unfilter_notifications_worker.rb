@@ -4,14 +4,25 @@ class UnfilterNotificationsWorker
   include Sidekiq::Worker
   include Redisable
 
-  def perform(account_id, from_account_id)
-    @from_account = Account.find_by(id: from_account_id)
-    @recipient    = Account.find_by(id: account_id)
+  # Earlier versions of the feature passed a `notification_request` ID
+  # If `to_account_id` is passed, the first argument is an account ID
+  # TODO for after 4.3.0: drop the single-argument case
+  def perform(notification_request_or_account_id, from_account_id = nil)
+    if from_account_id.present?
+      @notification_request = nil
+      @from_account = Account.find_by(id: from_account_id)
+      @recipient    = Account.find_by(id: notification_request_or_account_id)
+    else
+      @notification_request = NotificationRequest.find_by(id: notification_request_or_account_id)
+      @from_account = @notification_request&.from_account
+      @recipient    = @notification_request&.account
+    end
 
     return if @from_account.nil? || @recipient.nil?
 
     push_to_conversations!
     unfilter_notifications!
+    remove_request!
     decrement_worker_count!
   end
 
@@ -23,6 +34,10 @@ class UnfilterNotificationsWorker
 
   def unfilter_notifications!
     filtered_notifications.in_batches.update_all(filtered: false)
+  end
+
+  def remove_request!
+    @notification_request&.destroy!
   end
 
   def filtered_notifications

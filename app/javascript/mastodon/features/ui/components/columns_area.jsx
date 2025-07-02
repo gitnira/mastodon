@@ -15,17 +15,22 @@ import {
   HashtagTimeline,
   DirectTimeline,
   FavouritedStatuses,
+  EmojiReactedStatuses,
   BookmarkedStatuses,
   ListTimeline,
   Directory,
+  BookmarkCategoryStatuses,
+  AntennaSetting,
+  AntennaTimeline,
+  CircleStatuses,
 } from '../util/async-components';
 import { useColumnsContext } from '../util/columns_context';
 
 import BundleColumnError from './bundle_column_error';
 import { ColumnLoading } from './column_loading';
-import { ComposePanel, RedirectToMobileComposeIfNeeded } from './compose_panel';
+import ComposePanel from './compose_panel';
 import DrawerLoading from './drawer_loading';
-import { CollapsibleNavigationPanel } from 'mastodon/features/navigation_panel';
+import NavigationPanel from './navigation_panel';
 
 const componentMap = {
   'COMPOSE': Compose,
@@ -37,7 +42,12 @@ const componentMap = {
   'HASHTAG': HashtagTimeline,
   'DIRECT': DirectTimeline,
   'FAVOURITES': FavouritedStatuses,
+  'EMOJI_REACTIONS': EmojiReactedStatuses,
   'BOOKMARKS': BookmarkedStatuses,
+  'BOOKMARKS_EX': BookmarkCategoryStatuses,
+  'CIRCLE_STATUSES': CircleStatuses,
+  'ANTENNA': AntennaSetting,
+  'ANTENNA_TIMELINE': AntennaTimeline,
   'LIST': ListTimeline,
   'DIRECTORY': Directory,
 };
@@ -124,7 +134,6 @@ export default class ColumnsArea extends ImmutablePureComponent {
           <div className='columns-area__panels__pane columns-area__panels__pane--compositional'>
             <div className='columns-area__panels__pane__inner'>
               {renderComposePanel && <ComposePanel />}
-              <RedirectToMobileComposeIfNeeded />
             </div>
           </div>
 
@@ -133,7 +142,11 @@ export default class ColumnsArea extends ImmutablePureComponent {
             <div className='columns-area columns-area--mobile'>{children}</div>
           </div>
 
-          <CollapsibleNavigationPanel />
+          <div className='columns-area__panels__pane columns-area__panels__pane--start columns-area__panels__pane--navigational'>
+            <div className='columns-area__panels__pane__inner'>
+              <NavigationPanel />
+            </div>
+          </div>
         </div>
       );
     }

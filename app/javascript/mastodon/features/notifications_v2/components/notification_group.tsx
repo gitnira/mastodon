@@ -10,15 +10,18 @@ import { useAppSelector, useAppDispatch } from 'mastodon/store';
 import { NotificationAdminReport } from './notification_admin_report';
 import { NotificationAdminSignUp } from './notification_admin_sign_up';
 import { NotificationAnnualReport } from './notification_annual_report';
+import { NotificationEmojiReaction } from './notification_emoji_reaction';
 import { NotificationFavourite } from './notification_favourite';
 import { NotificationFollow } from './notification_follow';
 import { NotificationFollowRequest } from './notification_follow_request';
+import { NotificationListStatus } from './notification_list_status';
 import { NotificationMention } from './notification_mention';
 import { NotificationModerationWarning } from './notification_moderation_warning';
 import { NotificationPoll } from './notification_poll';
 import { NotificationReblog } from './notification_reblog';
 import { NotificationSeveredRelationships } from './notification_severed_relationships';
 import { NotificationStatus } from './notification_status';
+import { NotificationStatusReference } from './notification_status_reference';
 import { NotificationUpdate } from './notification_update';
 
 export const NotificationGroup: React.FC<{
@@ -79,6 +82,14 @@ export const NotificationGroup: React.FC<{
         />
       );
       break;
+    case 'emoji_reaction':
+      content = (
+        <NotificationEmojiReaction
+          unread={unread}
+          notification={notificationGroup}
+        />
+      );
+      break;
     case 'severed_relationships':
       content = (
         <NotificationSeveredRelationships
@@ -90,6 +101,14 @@ export const NotificationGroup: React.FC<{
     case 'mention':
       content = (
         <NotificationMention unread={unread} notification={notificationGroup} />
+      );
+      break;
+    case 'status_reference':
+      content = (
+        <NotificationStatusReference
+          unread={unread}
+          notification={notificationGroup}
+        />
       );
       break;
     case 'follow':
@@ -113,6 +132,14 @@ export const NotificationGroup: React.FC<{
     case 'status':
       content = (
         <NotificationStatus unread={unread} notification={notificationGroup} />
+      );
+      break;
+    case 'list_status':
+      content = (
+        <NotificationListStatus
+          unread={unread}
+          notification={notificationGroup}
+        />
       );
       break;
     case 'update':

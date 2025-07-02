@@ -1,4 +1,4 @@
-import { render, fireEvent, screen } from '@/testing/rendering';
+import { render, fireEvent, screen } from 'mastodon/test_helpers';
 
 import Column from '../column';
 
@@ -7,7 +7,7 @@ const fakeIcon = () => <span />;
 describe('<Column />', () => {
   describe('<ColumnHeader /> click handler', () => {
     it('runs the scroll animation if the column contains scrollable content', () => {
-      const scrollToMock = vi.fn();
+      const scrollToMock = jest.fn();
       const { container } = render(
         <Column heading='notifications' icon='notifications' iconComponent={fakeIcon}>
           <div className='scrollable' />

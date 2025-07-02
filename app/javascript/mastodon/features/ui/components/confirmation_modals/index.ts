@@ -1,10 +1,11 @@
 export { ConfirmationModal } from './confirmation_modal';
 export { ConfirmDeleteStatusModal } from './delete_status';
 export { ConfirmDeleteListModal } from './delete_list';
-export {
-  ConfirmReplyModal,
-  ConfirmEditStatusModal,
-} from './discard_draft_confirmation';
+export { ConfirmDeleteAntennaModal } from './delete_antenna';
+export { ConfirmDeleteCircleModal } from './delete_circle';
+export { ConfirmDeleteBookmarkCategoryModal } from './delete_bookmark_category';
+export { ConfirmReplyModal } from './reply';
+export { ConfirmEditStatusModal } from './edit_status';
 export { ConfirmUnfollowModal } from './unfollow';
 export { ConfirmClearNotificationsModal } from './clear_notifications';
 export { ConfirmLogOutModal } from './log_out';
