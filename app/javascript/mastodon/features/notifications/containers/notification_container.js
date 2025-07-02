@@ -2,6 +2,7 @@ import { connect } from 'react-redux';
 
 import { mentionCompose } from '../../../actions/compose';
 import {
+  emojiReact,
   toggleFavourite,
   toggleReblog,
 } from '../../../actions/interactions';
@@ -37,8 +38,16 @@ const mapDispatchToProps = dispatch => ({
     dispatch(toggleReblog(status.get('id'), e.shiftKey));
   },
 
+  onReblogForceModal (status) {
+    dispatch(toggleReblog(status.get('id'), true, true));
+  },
+
   onFavourite (status) {
     dispatch(toggleFavourite(status.get('id')));
+  },
+
+  onEmojiReact (status, emoji) {
+    dispatch(emojiReact(status, emoji));
   },
 
   onToggleHidden (status) {

@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe StatusTrend do
-  it_behaves_like 'RankedTrend'
+  include_examples 'RankedTrend'
 
   describe 'Associations' do
     it { is_expected.to belong_to(:account).required }

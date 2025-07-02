@@ -22,11 +22,10 @@ import { useAppDispatch, useAppSelector } from 'mastodon/store';
 export const Upload: React.FC<{
   id: string;
   dragging?: boolean;
-  draggable?: boolean;
   overlay?: boolean;
   tall?: boolean;
   wide?: boolean;
-}> = ({ id, dragging, draggable = true, overlay, tall, wide }) => {
+}> = ({ id, dragging, overlay, tall, wide }) => {
   const dispatch = useAppDispatch();
   const media = useAppSelector((state) =>
     (
@@ -72,7 +71,6 @@ export const Upload: React.FC<{
     <div
       className={classNames('compose-form__upload media-gallery__item', {
         dragging,
-        draggable,
         overlay,
         'media-gallery__item--tall': tall,
         'media-gallery__item--wide': wide,

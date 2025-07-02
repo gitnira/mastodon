@@ -5,26 +5,34 @@ import { injectIntl, defineMessages, FormattedMessage } from 'react-intl';
 import classNames from 'classnames';
 import { Link } from 'react-router-dom';
 
+
 import ImmutablePropTypes from 'react-immutable-proptypes';
 import ImmutablePureComponent from 'react-immutable-pure-component';
 
 import { HotKeys } from 'react-hotkeys';
 
 import AlternateEmailIcon from '@/material-icons/400-24px/alternate_email.svg?react';
+import QuoteIcon from '@/material-icons/400-24px/format_quote.svg?react';
+import ReferenceIcon from '@/material-icons/400-24px/link.svg?react';
+import PushPinIcon from '@/material-icons/400-24px/push_pin.svg?react';
 import RepeatIcon from '@/material-icons/400-24px/repeat.svg?react';
+import LimitedIcon from '@/material-icons/400-24px/shield.svg?react';
+import TimerIcon from '@/material-icons/400-24px/timer.svg?react';
+import AttachmentList from 'mastodon/components/attachment_list';
 import { ContentWarning } from 'mastodon/components/content_warning';
 import { FilterWarning } from 'mastodon/components/filter_warning';
 import { Icon }  from 'mastodon/components/icon';
-import { PictureInPicturePlaceholder } from 'mastodon/components/picture_in_picture_placeholder';
+import PictureInPicturePlaceholder from 'mastodon/components/picture_in_picture_placeholder';
 import { withOptionalRouter, WithOptionalRouterPropTypes } from 'mastodon/utils/react_router';
 
+import CompactedStatusContainer from '../containers/compacted_status_container';
 import Card from '../features/status/components/card';
 // We use the component (and not the container) since we do not want
 // to use the progress bar to show download progress
 import Bundle from '../features/ui/components/bundle';
 import { MediaGallery, Video, Audio } from '../features/ui/util/async-components';
 import { SensitiveMediaContext } from '../features/ui/util/sensitive_media_context';
-import { displayMedia } from '../initial_state';
+import { displayMedia, enableEmojiReaction, isShowItem, isHideItem } from '../initial_state';
 
 import { Avatar } from './avatar';
 import { AvatarOverlay } from './avatar_overlay';
@@ -33,6 +41,7 @@ import { getHashtagBarForStatus } from './hashtag_bar';
 import { RelativeTimestamp } from './relative_timestamp';
 import StatusActionBar from './status_action_bar';
 import StatusContent from './status_content';
+import StatusEmojiReactionsBar from './status_emoji_reactions_bar';
 import { StatusThreadLabel } from './status_thread_label';
 import { VisibilityIcon } from './visibility_icon';
 
@@ -72,10 +81,7 @@ export const defaultMediaVisibility = (status) => {
 };
 
 const messages = defineMessages({
-  public_short: { id: 'privacy.public.short', defaultMessage: 'Public' },
-  unlisted_short: { id: 'privacy.unlisted.short', defaultMessage: 'Quiet public' },
-  private_short: { id: 'privacy.private.short', defaultMessage: 'Followers' },
-  direct_short: { id: 'privacy.direct.short', defaultMessage: 'Specific people' },
+  limited_short: { id: 'privacy.limited.short', defaultMessage: 'Limited' },
   edited: { id: 'status.edited', defaultMessage: 'Edited {date}' },
 });
 
@@ -86,14 +92,16 @@ class Status extends ImmutablePureComponent {
   static propTypes = {
     status: ImmutablePropTypes.map,
     account: ImmutablePropTypes.record,
-    children: PropTypes.node,
+    contextType: PropTypes.string,
     previousId: PropTypes.string,
-    nextInReplyToId: PropTypes.string,
     rootId: PropTypes.string,
     onClick: PropTypes.func,
     onReply: PropTypes.func,
     onFavourite: PropTypes.func,
+    onEmojiReact: PropTypes.func,
+    onUnEmojiReact: PropTypes.func,
     onReblog: PropTypes.func,
+    onReblogForceModal: PropTypes.func,
     onDelete: PropTypes.func,
     onDirect: PropTypes.func,
     onMention: PropTypes.func,
@@ -114,7 +122,6 @@ class Status extends ImmutablePureComponent {
     onMoveUp: PropTypes.func,
     onMoveDown: PropTypes.func,
     showThread: PropTypes.bool,
-    isQuotedPost: PropTypes.bool,
     getScrollPosition: PropTypes.func,
     updateScrollBottom: PropTypes.func,
     cacheMediaWidth: PropTypes.func,
@@ -128,6 +135,8 @@ class Status extends ImmutablePureComponent {
       inUse: PropTypes.bool,
       available: PropTypes.bool,
     }),
+    withoutEmojiReactions: PropTypes.bool,
+    withoutQuote: PropTypes.bool,
     ...WithOptionalRouterPropTypes,
   };
 
@@ -175,8 +184,9 @@ class Status extends ImmutablePureComponent {
     }
   };
 
-  handleHeaderClick = e => {
+  handleMouseUp = e => {
     // Only handle clicks on the empty space above the content
+
     if (e.target !== e.currentTarget && e.detail >= 1) {
       return;
     }
@@ -301,11 +311,7 @@ class Status extends ImmutablePureComponent {
     if (newTab) {
       window.open(path, '_blank', 'noopener');
     } else {
-      if (history.location.pathname.replace('/deck/', '/') === path) {
-        history.replace(path);
-      } else {
-        history.push(path);
-      }
+      history.push(path);
     }
   };
 
@@ -376,9 +382,11 @@ class Status extends ImmutablePureComponent {
   };
 
   render () {
-    const { intl, hidden, featured, unfocusable, unread, showThread, isQuotedPost = false, scrollKey, pictureInPicture, previousId, nextInReplyToId, rootId, skipPrepend, avatarSize = 46, children } = this.props;
+    const { intl, hidden, featured, unfocusable, unread, showThread, scrollKey, pictureInPicture, previousId, rootId, withoutQuote, skipPrepend, avatarSize = 46 } = this.props;
 
     let { status, account, ...other } = this.props;
+    
+    const contextType = (this.props.contextType || '').split(':')[0];
 
     if (status === null) {
       return null;
@@ -403,15 +411,24 @@ class Status extends ImmutablePureComponent {
 
     const connectUp = previousId && previousId === status.get('in_reply_to_id');
     const connectToRoot = rootId && rootId === status.get('in_reply_to_id');
-    const connectReply = nextInReplyToId && nextInReplyToId === status.get('id');
     const matchedFilters = status.get('matched_filters');
 
-    if (status.get('reblog', null) !== null && typeof status.get('reblog') === 'object') {
+    let visibilityName = status.get('limited_scope') || status.get('visibility_ex') || status.get('visibility');
+
+    if (featured) {
+      prepend = (
+        <div className='status__prepend'>
+          <div className='status__prepend__icon'><Icon id='thumb-tack' icon={PushPinIcon} /></div>
+          <FormattedMessage id='status.pinned' defaultMessage='Pinned post' />
+        </div>
+      );
+    } else if (status.get('reblog', null) !== null && typeof status.get('reblog') === 'object') {
       const display_name_html = { __html: status.getIn(['account', 'display_name_html']) };
 
       prepend = (
         <div className='status__prepend'>
           <div className='status__prepend__icon'><Icon id='retweet' icon={RepeatIcon} /></div>
+          <div className='status__prepend__icon'><VisibilityIcon visibility={visibilityName} /></div>
           <FormattedMessage id='status.reblogged_by' defaultMessage='{name} boosted' values={{ name: <Link data-id={status.getIn(['account', 'id'])} data-hover-card-account={status.getIn(['account', 'id'])} to={`/@${status.getIn(['account', 'acct'])}`} className='status__display-name muted'><bdi><strong dangerouslySetInnerHTML={display_name_html} /></bdi></Link> }} />
         </div>
       );
@@ -433,6 +450,12 @@ class Status extends ImmutablePureComponent {
       );
     }
 
+    if (account === undefined || account === null) {
+      statusAvatar = <Avatar account={status.get('account')} size={avatarSize} />;
+    } else {
+      statusAvatar = <AvatarOverlay account={status.get('account')} friend={account} />;
+    }
+    
     const expanded = (!matchedFilters || this.state.showDespiteFilter) && (!status.get('hidden') || status.get('spoiler_text').length === 0);
 
     if (hidden) {
@@ -452,7 +475,14 @@ class Status extends ImmutablePureComponent {
     } else if (status.get('media_attachments').size > 0) {
       const language = status.getIn(['translation', 'language']) || status.get('language');
 
-      if (['image', 'gifv', 'unknown'].includes(status.getIn(['media_attachments', 0, 'type'])) || status.get('media_attachments').size > 1) {
+      if (this.props.muted) {
+        media = (
+          <AttachmentList
+            compact
+            media={status.get('media_attachments')}
+          />
+        );
+      } else if (['image', 'gifv', 'unknown'].includes(status.getIn(['media_attachments', 0, 'type'])) || status.get('media_attachments').size > 1) {
         media = (
           <Bundle fetchComponent={MediaGallery} loading={this.renderLoadingMediaGallery}>
             {Component => (
@@ -487,6 +517,9 @@ class Status extends ImmutablePureComponent {
                 foregroundColor={attachment.getIn(['meta', 'colors', 'foreground'])}
                 accentColor={attachment.getIn(['meta', 'colors', 'accent'])}
                 duration={attachment.getIn(['meta', 'original', 'duration'], 0)}
+                width={this.props.cachedMediaWidth}
+                height={110}
+                cacheWidth={this.props.cacheMediaWidth}
                 deployPictureInPicture={pictureInPicture.get('available') ? this.handleDeployPictureInPicture : undefined}
                 sensitive={status.get('sensitive')}
                 blurhash={attachment.get('blurhash')}
@@ -523,59 +556,65 @@ class Status extends ImmutablePureComponent {
           </Bundle>
         );
       }
-    } else if (status.get('card') && !status.get('quote')) {
+    } else if (status.get('card') && !this.props.muted) {
       media = (
         <Card
           onOpenMedia={this.handleOpenMedia}
           card={status.get('card')}
           compact
-          sensitive={status.get('sensitive')}
+          sensitive={status.get('sensitive') && !status.get('spoiler_text')}
         />
       );
     }
 
-    if (account === undefined || account === null) {
-      statusAvatar = <Avatar account={status.get('account')} size={avatarSize} />;
-    } else {
-      statusAvatar = <AvatarOverlay account={status.get('account')} friend={account} />;
+    visibilityName = status.get('limited_scope') || status.get('visibility_ex') || status.get('visibility');
+
+
+    let emojiReactionsBar = null;
+    if (!this.props.withoutEmojiReactions && status.get('emoji_reactions')) {
+      const emojiReactions = status.get('emoji_reactions');
+      const emojiReactionAvailableServer = !isHideItem('emoji_reaction_unavailable_server') || status.getIn(['account', 'server_features', 'emoji_reaction']);
+      if (emojiReactions.size > 0 && enableEmojiReaction && emojiReactionAvailableServer) {
+        emojiReactionsBar = <StatusEmojiReactionsBar emojiReactions={emojiReactions} myReactionOnly={!isShowItem('emoji_reaction_on_timeline')} status={status} onEmojiReact={this.props.onEmojiReact} onUnEmojiReact={this.props.onUnEmojiReact} />;
+      }
     }
 
     const {statusContentProps, hashtagBar} = getHashtagBarForStatus(status);
 
+    const withLimited = status.get('visibility_ex') === 'limited' && status.get('limited_scope') ? <span className='status__visibility-icon'><Icon id='get-pocket' icon={LimitedIcon} title={intl.formatMessage(messages.limited_short)} /></span> : null;
+    const withQuote = status.get('quote_id') ? <span className='status__visibility-icon'><Icon id='quote-right' icon={QuoteIcon} title='Quote' /></span> : null;
+    const withReference = (!withQuote && status.get('status_references_count') > 0) ? <span className='status__visibility-icon'><Icon id='link' icon={ReferenceIcon} title='Quiet quote' /></span> : null;
+    const withExpiration = status.get('expires_at') ? <span className='status__visibility-icon'><Icon id='clock-o' icon={TimerIcon} title='Expiration' /></span> : null;
+
+    const quote = !this.props.muted && !withoutQuote && status.get('quote_id') && (['public', 'community'].includes(contextType) ? isShowItem('quote_in_public') : isShowItem('quote_in_home')) && <CompactedStatusContainer id={status.get('quote_id')} history={this.props.history} />;
+
     return (
       <HotKeys handlers={handlers} tabIndex={unfocusable ? null : -1}>
-        <div className={classNames('status__wrapper', `status__wrapper-${status.get('visibility')}`, { 'status__wrapper-reply': !!status.get('in_reply_to_id'), unread, focusable: !this.props.muted })} tabIndex={this.props.muted || unfocusable ? null : 0} data-featured={featured ? 'true' : null} aria-label={textForScreenReader(intl, status, rebloggedByText)} ref={this.handleRef} data-nosnippet={status.getIn(['account', 'noindex'], true) || undefined}>
+        <div className={classNames('status__wrapper', `status__wrapper-${status.get('visibility_ex')}`, { 'status__wrapper-reply': !!status.get('in_reply_to_id'), unread, focusable: !this.props.muted })} tabIndex={this.props.muted || unfocusable ? null : 0} data-featured={featured ? 'true' : null} aria-label={textForScreenReader(intl, status, rebloggedByText)} ref={this.handleRef} data-nosnippet={status.getIn(['account', 'noindex'], true) || undefined}>
           {!skipPrepend && prepend}
 
-          <div
-            className={
-              classNames('status', `status-${status.get('visibility')}`,
-              {
-                'status-reply': !!status.get('in_reply_to_id'),
-                'status--in-thread': !!rootId,
-                'status--first-in-thread': previousId && (!connectUp || connectToRoot), muted: this.props.muted,
-                'status--is-quote': isQuotedPost,
-                'status--has-quote': !!status.get('quote'),
-              })
-            }
-            data-id={status.get('id')}
-          >
-            {(connectReply || connectUp || connectToRoot) && <div className={classNames('status__line', { 'status__line--full': connectReply, 'status__line--first': !status.get('in_reply_to_id') && !connectToRoot })} />}
+          <div className={classNames('status', `status-${status.get('visibility_ex')}`, { 'status-reply': !!status.get('in_reply_to_id'), 'status--in-thread': !!rootId, 'status--first-in-thread': previousId && (!connectUp || connectToRoot), muted: this.props.muted })} data-id={status.get('id')}>
 
-            <div onClick={this.handleHeaderClick} onAuxClick={this.handleHeaderClick} className='status__info'>
-              <Link to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time'>
-                <span className='status__visibility-icon'><VisibilityIcon visibility={status.get('visibility')} /></span>
-                <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
-              </Link>
+            {(!matchedFilters || expanded || isShowItem('avatar_on_filter')) && (
+              <div onMouseUp={this.handleMouseUp} className='status__info'>
+                <Link to={`/@${status.getIn(['account', 'acct'])}/${status.get('id')}`} className='status__relative-time'>
+                  {withQuote}
+                  {withReference}
+                  {withExpiration}
+                  {withLimited}
+                  <span className='status__visibility-icon'><VisibilityIcon visibility={visibilityName} /></span>
+                  <RelativeTimestamp timestamp={status.get('created_at')} />{status.get('edited_at') && <abbr title={intl.formatMessage(messages.edited, { date: intl.formatDate(status.get('edited_at'), { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) })}> *</abbr>}
+                </Link>
 
-              <Link to={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} data-hover-card-account={status.getIn(['account', 'id'])} className='status__display-name'>
-                <div className='status__avatar'>
-                  {statusAvatar}
-                </div>
+                <Link to={`/@${status.getIn(['account', 'acct'])}`} title={status.getIn(['account', 'acct'])} data-hover-card-account={status.getIn(['account', 'id'])} className='status__display-name'>
+                  <div className='status__avatar'>
+                    {statusAvatar}
+                  </div>
 
-                <DisplayName account={status.get('account')} />
-              </Link>
-            </div>
+                  <DisplayName account={status.get('account')} />
+                </Link>
+              </div>
+            )}
 
             {matchedFilters && <FilterWarning title={matchedFilters.join(', ')} expanded={this.state.showDespiteFilter} onClick={this.handleFilterToggle} />}
 
@@ -594,14 +633,12 @@ class Status extends ImmutablePureComponent {
 
                 {media}
                 {hashtagBar}
-
-                {children}
+                {quote}
+                {emojiReactionsBar}
               </>
             )}
 
-            {!isQuotedPost &&
-              <StatusActionBar scrollKey={scrollKey} status={status} account={account}  {...other} />
-            }
+            {(!matchedFilters || this.state.showDespiteFilter) && <StatusActionBar scrollKey={scrollKey} status={status} account={account}  {...other} />}
           </div>
         </div>
       </HotKeys>

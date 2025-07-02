@@ -78,41 +78,36 @@ RSpec.describe ActivityPub::Activity::Delete do
     end
   end
 
-  context 'when the deleted object is an account' do
-    let(:json) do
-      {
-        '@context': 'https://www.w3.org/ns/activitystreams',
-        id: 'foo',
-        type: 'Delete',
-        actor: ActivityPub::TagManager.instance.uri_for(sender),
-        object: ActivityPub::TagManager.instance.uri_for(sender),
-        signature: 'foo',
-      }.with_indifferent_access
+  context 'when the status is limited post and has conversation' do
+    subject { described_class.new(json, sender) }
+
+    let(:conversation) { Fabricate(:conversation, ancestor_status: status) }
+
+    before do
+      status.update(conversation: conversation, visibility: :limited)
+      status.mentions << Fabricate(:mention, silent: true, account: Fabricate(:account, protocol: :activitypub, domain: 'example.com', inbox_url: 'https://example.com/actor/inbox', shared_inbox_url: 'https://example.com/inbox'))
+      status.save
+      stub_request(:post, 'https://example.com/inbox').to_return(status: 200)
+      subject.perform
     end
 
-    describe '#perform' do
-      subject { described_class.new(json, sender) }
-
-      let(:service) { instance_double(DeleteAccountService, call: true) }
-
-      before do
-        allow(DeleteAccountService).to receive(:new).and_return(service)
-      end
-
-      it 'calls the account deletion service' do
-        subject.perform
-
-        expect(service)
-          .to have_received(:call).with(sender, { reserve_username: false, skip_activitypub: true })
-      end
+    it 'forwards to parent status holder', :inline_jobs do
+      expect(a_request(:post, 'https://example.com/inbox').with(body: hash_including({
+        type: 'Delete',
+        signature: 'foo',
+      }))).to have_been_made.once
     end
   end
 
-  context 'when the deleted object is a quote authorization' do
-    let(:quoter) { Fabricate(:account, domain: 'b.example.com') }
-    let(:status) { Fabricate(:status, account: quoter) }
-    let(:quoted_status) { Fabricate(:status, account: sender, uri: 'https://example.com/statuses/1234') }
-    let!(:quote) { Fabricate(:quote, approval_uri: 'https://example.com/approvals/1234', state: :accepted, status: status, quoted_status: quoted_status) }
+  context 'when given a friend server' do
+    subject { described_class.new(json, sender) }
+
+    before do
+      Fabricate(:friend_domain, domain: 'abc.com', inbox_url: 'https://abc.com/inbox', passive_state: :accepted)
+      stub_request(:post, 'https://abc.com/inbox')
+    end
+
+    let(:sender) { Fabricate(:account, domain: 'abc.com', url: 'https://abc.com/#actor') }
 
     let(:json) do
       {
@@ -120,18 +115,13 @@ RSpec.describe ActivityPub::Activity::Delete do
         id: 'foo',
         type: 'Delete',
         actor: ActivityPub::TagManager.instance.uri_for(sender),
-        object: quote.approval_uri,
-        signature: 'foo',
+        object: 'https://www.w3.org/ns/activitystreams#Public',
       }.with_indifferent_access
     end
 
-    describe '#perform' do
-      subject { described_class.new(json, sender) }
-
-      it 'revokes the authorization' do
-        expect { subject.perform }
-          .to change { quote.reload.state }.to('revoked')
-      end
+    it 'marks the friend as deleted' do
+      subject.perform
+      expect(FriendDomain.find_by(domain: 'abc.com')).to be_nil
     end
   end
 end

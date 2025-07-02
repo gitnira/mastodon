@@ -68,6 +68,10 @@
                 label: t('statuses_cleanup.keep_media'),
                 wrapper: :with_label
 
+  .fields-row
+    .fields-row__column.fields-row__column-6.fields-group
+      = f.input :keep_self_emoji, wrapper: :with_label, label: t('statuses_cleanup.keep_self_emoji'), hint: t('statuses_cleanup.keep_self_emoji_hint')
+
   %h4= t('statuses_cleanup.interaction_exceptions')
 
   .fields-row
@@ -85,5 +89,9 @@
                 input_html: { min: 1, placeholder: t('statuses_cleanup.ignore_reblogs') },
                 label: t('statuses_cleanup.min_reblogs'),
                 wrapper: :with_label
+
+  .fields-row
+    .fields-row__column.fields-row__column-6.fields-group
+      = f.input :min_emojis, wrapper: :with_label, label: t('statuses_cleanup.min_emojis'), hint: t('statuses_cleanup.min_emojis_hint'), input_html: { min: 1, placeholder: t('statuses_cleanup.ignore_emojis') }
 
   .flash-message= t('statuses_cleanup.interaction_exceptions_explanation')

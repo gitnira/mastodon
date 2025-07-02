@@ -3,7 +3,7 @@
 class BlockDomainService < BaseService
   attr_reader :domain_block
 
-  def call(domain_block, update: false)
+  def call(domain_block, update = false)
     @domain_block = domain_block
     @domain_block_event = nil
 
@@ -27,6 +27,9 @@ class BlockDomainService < BaseService
       silence_accounts!
     elsif domain_block.suspend?
       suspend_accounts!
+      remove_friends!
+    elsif domain_block.reject_friend?
+      remove_friends!
     end
 
     DomainClearMediaWorker.perform_async(domain_block.id) if domain_block.reject_media?
@@ -58,6 +61,10 @@ class BlockDomainService < BaseService
     end
   end
 
+  def remove_friends!
+    blocked_friends.find_each(&:destroy)
+  end
+
   def blocked_domain
     domain_block.domain
   end
@@ -68,5 +75,9 @@ class BlockDomainService < BaseService
 
   def blocked_domain_accounts
     Account.by_domain_and_subdomains(blocked_domain)
+  end
+
+  def blocked_friends
+    @blocked_friends ||= FriendDomain.by_domain_and_subdomains(blocked_domain)
   end
 end

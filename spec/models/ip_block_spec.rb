@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe IpBlock do
-  it_behaves_like 'Expireable'
+  include_examples 'Expireable'
 
   describe 'Validations' do
     subject { Fabricate.build :ip_block }

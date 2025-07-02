@@ -12,7 +12,6 @@ import Option from './components/option';
 
 const mapStateToProps = state => ({
   rules: state.getIn(['server', 'server', 'rules']),
-  locale: state.getIn(['meta', 'locale']),
 });
 
 class Rules extends PureComponent {
@@ -20,7 +19,6 @@ class Rules extends PureComponent {
   static propTypes = {
     onNextStep: PropTypes.func.isRequired,
     rules: ImmutablePropTypes.list,
-    locale: PropTypes.string,
     selectedRuleIds: ImmutablePropTypes.set.isRequired,
     onToggle: PropTypes.func.isRequired,
   };
@@ -36,7 +34,7 @@ class Rules extends PureComponent {
   };
 
   render () {
-    const { rules, locale, selectedRuleIds } = this.props;
+    const { rules, selectedRuleIds } = this.props;
 
     return (
       <>
@@ -51,7 +49,7 @@ class Rules extends PureComponent {
               value={item.get('id')}
               checked={selectedRuleIds.includes(item.get('id'))}
               onToggle={this.handleRulesToggle}
-              label={item.getIn(['translations', locale, 'text']) || item.getIn(['translations', locale.split('-')[0], 'text']) || item.get('text')}
+              label={item.get('text')}
               multiple
             />
           ))}

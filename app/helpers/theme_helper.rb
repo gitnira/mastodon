@@ -4,11 +4,11 @@ module ThemeHelper
   def theme_style_tags(theme)
     if theme == 'system'
       ''.html_safe.tap do |tags|
-        tags << vite_stylesheet_tag('themes/mastodon-light', type: :virtual, media: 'not all and (prefers-color-scheme: dark)', crossorigin: 'anonymous')
-        tags << vite_stylesheet_tag('themes/default', type: :virtual, media: '(prefers-color-scheme: dark)', crossorigin: 'anonymous')
+        tags << stylesheet_pack_tag('mastodon-light', media: 'not all and (prefers-color-scheme: dark)', crossorigin: 'anonymous')
+        tags << stylesheet_pack_tag('default', media: '(prefers-color-scheme: dark)', crossorigin: 'anonymous')
       end
     else
-      vite_stylesheet_tag "themes/#{theme}", type: :virtual, media: 'all', crossorigin: 'anonymous'
+      stylesheet_pack_tag theme, media: 'all', crossorigin: 'anonymous'
     end
   end
 
@@ -32,6 +32,24 @@ module ThemeHelper
         skip_pipeline: true
       )
     end
+  end
+
+  def system_stylesheet
+    stylesheet_link_tag(
+      system_css_path,
+      host: root_url,
+      media: :all,
+      skip_pipeline: true
+    )
+  end
+
+  def user_custom_stylesheet
+    stylesheet_link_tag(
+      user_custom_css_path({ version: user_custom_css_version }),
+      host: root_url,
+      media: :all,
+      skip_pipeline: true
+    )
   end
 
   private

@@ -32,7 +32,8 @@ export const BoostModal: React.FC<{
   );
 
   const statusId = status.get('id') as string;
-  const statusVisibility = status.get('visibility') as StatusVisibility;
+  const statusVisibility = (status.get('limited_scope') ||
+    status.get('visibility_ex')) as StatusVisibility;
 
   const [privacy, setPrivacy] = useState<StatusVisibility>(
     statusVisibility === 'private' ? 'private' : defaultPrivacy,
@@ -104,6 +105,7 @@ export const BoostModal: React.FC<{
           {!status.get('reblogged') && (
             <PrivacyDropdown
               noDirect
+              noLimited
               value={privacy}
               container={findContainer}
               onChange={onPrivacyChange}

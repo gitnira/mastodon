@@ -164,17 +164,29 @@ code {
         margin-top: -2px;
       }
     }
+
+    .kmyblue {
+      position: absolute;
+      margin: 0 4px;
+      margin-top: -2px;
+    }
   }
 
   .row {
     display: flex;
     margin: 0 -5px;
 
-    .input {
+    .input,
+    .fields-label {
       box-sizing: border-box;
       flex: 1 1 auto;
       width: 50%;
       padding: 0 5px;
+    }
+
+    .fields-label {
+      font-weight: bold;
+      margin-left: 12px;
     }
   }
 
@@ -393,7 +405,7 @@ code {
       max-width: 100%;
       height: auto;
       border-radius: var(--avatar-border-radius);
-      background: url('@/images/void.png');
+      background: url('images/void.png');
 
       &[src$='missing.png'] {
         visibility: hidden;
@@ -1156,7 +1168,7 @@ code {
 
       &__type {
         color: $darker-text-color;
-        overflow-wrap: anywhere;
+        word-break: break-word;
       }
     }
 
@@ -1211,6 +1223,10 @@ code {
   .table-action-link {
     margin-top: 10px;
     white-space: nowrap;
+  }
+
+  .template-row {
+    display: none;
   }
 }
 
@@ -1440,12 +1456,40 @@ code {
         display: block;
         color: $primary-text-color;
       }
+    }
+  }
 
-      .icon {
-        vertical-align: -5px;
-        width: 20px;
-        height: 20px;
-      }
+  &__memo {
+    color: $dark-text-color;
+    font-size: 14px;
+    margin: 16px 0;
+  }
+}
+
+.avatar-pile {
+  display: flex;
+  align-items: center;
+
+  img {
+    display: block;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    border: 2px solid var(--background-color);
+    background: var(--surface-background-color);
+    margin-inline-end: -16px;
+    transform: rotate(0);
+
+    &:first-child {
+      transform: rotate(-4deg);
+    }
+
+    &:nth-child(2) {
+      transform: rotate(-2deg);
+    }
+
+    &:last-child {
+      margin-inline-end: 0;
     }
   }
 }

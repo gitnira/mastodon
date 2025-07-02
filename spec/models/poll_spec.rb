@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe Poll do
-  it_behaves_like 'Expireable'
+  include_examples 'Expireable'
 
   describe '#reset_votes!' do
     let(:poll) { Fabricate :poll, cached_tallies: [2, 3], votes_count: 5, voters_count: 5 }

@@ -4,8 +4,10 @@ class ActivityPub::Activity::Delete < ActivityPub::Activity
   def perform
     if @account.uri == object_uri
       delete_person
+    elsif object_uri == ActivityPub::TagManager::COLLECTIONS[:public]
+      delete_friend
     else
-      delete_object
+      delete_note
     end
   end
 
@@ -17,7 +19,7 @@ class ActivityPub::Activity::Delete < ActivityPub::Activity
     end
   end
 
-  def delete_object
+  def delete_note
     return if object_uri.nil?
 
     with_redis_lock("delete_status_in_progress:#{object_uri}", raise_on_failure: false) do
@@ -32,38 +34,33 @@ class ActivityPub::Activity::Delete < ActivityPub::Activity
         Tombstone.find_or_create_by(uri: object_uri, account: @account)
       end
 
-      case @object['type']
-      when 'QuoteAuthorization'
-        revoke_quote
-      when 'Note', 'Question'
-        delete_status
-      else
-        delete_status || revoke_quote
-      end
+      @status   = Status.find_by(uri: object_uri, account: @account)
+      @status ||= Status.find_by(uri: @object['atomUri'], account: @account) if @object.is_a?(Hash) && @object['atomUri'].present?
+
+      return if @status.nil?
+
+      forwarder.forward! if forwarder.forwardable?
+      forward_for_conversation
+      delete_now!
     end
   end
 
-  def delete_status
-    @status   = Status.find_by(uri: object_uri, account: @account)
-    @status ||= Status.find_by(uri: @object['atomUri'], account: @account) if @object.is_a?(Hash) && @object['atomUri'].present?
+  def forward_for_conversation
+    return unless @status.conversation.present? && @status.conversation.local? && @json['signature'].present?
 
-    return if @status.nil?
-
-    forwarder.forward! if forwarder.forwardable?
-    RemoveStatusService.new.call(@status, redraft: false)
-
-    true
+    ActivityPub::ForwardConversationWorker.perform_async(Oj.dump(@json), @status.id, true)
   end
 
-  def revoke_quote
-    @quote = Quote.find_by(approval_uri: object_uri, quoted_account: @account)
-    return if @quote.nil?
-
-    ActivityPub::Forwarder.new(@account, @json, @quote.status).forward!
-    @quote.reject!
+  def delete_friend
+    friend = FriendDomain.find_by(domain: @account.domain)
+    friend&.destroy
   end
 
   def forwarder
     @forwarder ||= ActivityPub::Forwarder.new(@account, @json, @status)
+  end
+
+  def delete_now!
+    RemoveStatusService.new.call(@status, redraft: false)
   end
 end

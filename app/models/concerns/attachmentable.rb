@@ -22,7 +22,7 @@ module Attachmentable
   ).freeze
 
   included do
-    def self.has_attached_file(name, options = {}) # rubocop:disable Naming/PredicatePrefix
+    def self.has_attached_file(name, options = {}) # rubocop:disable Naming/PredicateName
       super
 
       send(:"before_#{name}_validate", prepend: true) do

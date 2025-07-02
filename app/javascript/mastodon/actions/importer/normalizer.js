@@ -3,7 +3,7 @@ import escapeTextContentForBrowser from 'escape-html';
 import { makeEmojiMap } from 'mastodon/models/custom_emoji';
 
 import emojify from '../../features/emoji/emoji';
-import { expandSpoilers } from '../../initial_state';
+import { expandSpoilers, me } from '../../initial_state';
 
 const domParser = new DOMParser();
 
@@ -23,18 +23,10 @@ export function normalizeFilterResult(result) {
 
 export function normalizeStatus(status, normalOldStatus) {
   const normalStatus   = { ...status };
-
   normalStatus.account = status.account.id;
 
   if (status.reblog && status.reblog.id) {
     normalStatus.reblog = status.reblog.id;
-  }
-
-  if (status.quote?.quoted_status ?? status.quote?.quoted_status_id) {
-    normalStatus.quote = {
-      ...status.quote,
-      quoted_status: status.quote.quoted_status?.id ?? status.quote?.quoted_status_id,
-    };
   }
 
   if (status.poll && status.poll.id) {
@@ -56,6 +48,14 @@ export function normalizeStatus(status, normalOldStatus) {
     normalStatus.filtered = status.filtered.map(normalizeFilterResult);
   }
 
+  if (status.emoji_reactions) {
+    normalStatus.emoji_reactions = normalizeEmojiReactions(status.emoji_reactions);
+  }
+
+  if (!status.visibility_ex) {
+    normalStatus.visibility_ex = status.visibility;
+  }
+
   // Only calculate these values when status first encountered and
   // when the underlying values change. Otherwise keep the ones
   // already in the reducer
@@ -66,6 +66,11 @@ export function normalizeStatus(status, normalOldStatus) {
     normalStatus.spoiler_text = normalOldStatus.get('spoiler_text');
     normalStatus.hidden = normalOldStatus.get('hidden');
 
+    // for quoted post
+    if (!normalStatus.filtered && normalOldStatus.get('filtered')) {
+      normalStatus.filtered = normalOldStatus.get('filtered');
+    }
+
     if (normalOldStatus.get('translation')) {
       normalStatus.translation = normalOldStatus.get('translation');
     }
@@ -75,6 +80,10 @@ export function normalizeStatus(status, normalOldStatus) {
     if (normalStatus.spoiler_text && !normalStatus.content) {
       normalStatus.content = normalStatus.spoiler_text;
       normalStatus.spoiler_text = '';
+    }
+
+    if (normalStatus.emojis && normalStatus.emojis.some((emoji) => emoji.is_sensitive) && !normalStatus.spoiler_text) {
+      normalStatus.spoiler_text = '[Contains sensitive custom emoji(s)]';
     }
 
     const spoilerText   = normalStatus.spoiler_text || '';
@@ -111,6 +120,17 @@ export function normalizeStatus(status, normalOldStatus) {
   }
 
   return normalStatus;
+}
+
+export function normalizeEmojiReactions(emoji_reactions) {
+  const myAccountId = me;
+  let converted = [];
+  for (let emoji_reaction of emoji_reactions) {
+    let obj = emoji_reaction;
+    obj.me = obj.account_ids.some((id) => id === myAccountId);
+    converted.push(obj);
+  }
+  return converted;
 }
 
 export function normalizeStatusTranslation(translation, status) {

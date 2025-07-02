@@ -33,22 +33,28 @@ import {
   COMPOSE_SENSITIVITY_CHANGE,
   COMPOSE_SPOILERNESS_CHANGE,
   COMPOSE_SPOILER_TEXT_CHANGE,
+  COMPOSE_MARKDOWN_CHANGE,
   COMPOSE_VISIBILITY_CHANGE,
   COMPOSE_LANGUAGE_CHANGE,
   COMPOSE_COMPOSING_CHANGE,
   COMPOSE_EMOJI_INSERT,
+  COMPOSE_EXPIRATION_INSERT,
+  COMPOSE_FEATURED_TAG_INSERT,
+  COMPOSE_REFERENCE_INSERT,
   COMPOSE_RESET,
   COMPOSE_POLL_ADD,
   COMPOSE_POLL_REMOVE,
   COMPOSE_POLL_OPTION_CHANGE,
   COMPOSE_POLL_SETTINGS_CHANGE,
+  COMPOSE_CIRCLE_CHANGE,
   COMPOSE_CHANGE_MEDIA_ORDER,
   COMPOSE_SET_STATUS,
+  COMPOSE_SEARCHABILITY_CHANGE,
   COMPOSE_FOCUS,
 } from '../actions/compose';
 import { REDRAFT } from '../actions/statuses';
 import { STORE_HYDRATE } from '../actions/store';
-import { me } from '../initial_state';
+import { enabledVisibilites, me } from '../initial_state';
 import { unescapeHTML } from '../utils/html';
 import { uuid } from '../uuid';
 
@@ -57,18 +63,21 @@ const initialState = ImmutableMap({
   sensitive: false,
   spoiler: false,
   spoiler_text: '',
+  markdown: false,
   privacy: null,
+  circle_id: null,
+  searchability: null,
   id: null,
   text: '',
   focusDate: null,
   caretPosition: null,
   preselectDate: null,
   in_reply_to: null,
+  reply_to_limited: false,
   is_composing: false,
   is_submitting: false,
   is_changing_upload: false,
   is_uploading: false,
-  should_redirect_to_compose_page: false,
   progress: 0,
   isUploadingThumbnail: false,
   thumbnailProgress: 0,
@@ -78,11 +87,14 @@ const initialState = ImmutableMap({
   suggestion_token: null,
   suggestions: ImmutableList(),
   default_privacy: 'public',
+  stay_privacy: false,
+  default_searchability: 'private',
   default_sensitive: false,
   default_language: 'en',
   resetFileKey: Math.floor((Math.random() * 0x10000)),
   idempotencyKey: null,
   tagHistory: ImmutableList(),
+  posted_on_this_session: false,
 });
 
 const initialPoll = ImmutableMap({
@@ -92,6 +104,10 @@ const initialPoll = ImmutableMap({
 });
 
 function statusToTextMentions(state, status) {
+  if (status.get('visibility_ex') === 'limited') {
+    return '';
+  }
+
   let set = ImmutableOrderedSet([]);
 
   if (status.getIn(['account', 'id']) !== me) {
@@ -103,20 +119,38 @@ function statusToTextMentions(state, status) {
 
 function clearAll(state) {
   return state.withMutations(map => {
-    map.set('id', null);
     map.set('text', '');
     map.set('spoiler', false);
     map.set('spoiler_text', '');
+    map.set('markdown', false);
     map.set('is_submitting', false);
     map.set('is_changing_upload', false);
+    if (!state.get('stay_privacy') || state.get('in_reply_to') || !state.get('posted_on_this_session') || state.get('id')) {
+      map.set('privacy', state.get('default_privacy'));
+      map.set('circle_id', null);
+    }
+    if (state.get('stay_privacy') && !state.get('in_reply_to')) {
+      map.set('default_privacy', state.get('privacy'));
+    }
+    if (!state.get('in_reply_to')) {
+      map.set('posted_on_this_session', true);
+    }
+    map.set('reply_to_limited', false);
+    map.set('limited_scope', null);
+    map.set('id', null);
     map.set('in_reply_to', null);
-    map.set('privacy', state.get('default_privacy'));
+    if (state.get('default_searchability') === 'public_unlisted' && !enabledVisibilites.includes('public_unlisted')) {
+      map.set('searchability', 'public');
+    } else {
+      map.set('searchability', state.get('default_searchability'));
+    }
     map.set('sensitive', state.get('default_sensitive'));
     map.set('language', state.get('default_language'));
     map.update('media_attachments', list => list.clear());
     map.set('progress', 0);
     map.set('poll', null);
     map.set('idempotencyKey', uuid());
+    normalizePrivacy(map);
   });
 }
 
@@ -198,6 +232,22 @@ const sortHashtagsByUse = (state, tags) => {
   return sorted;
 };
 
+const normalizePrivacy = (map, last) => {
+  if (!enabledVisibilites) {
+    return;
+  }
+
+  const current = map.get('privacy');
+  const invalid = !enabledVisibilites.includes(current);
+
+  if (invalid) {
+    if (enabledVisibilites.length > 0) {
+      const index = last ? enabledVisibilites.length - 1 : 0;
+      map.set('privacy', enabledVisibilites[index]);
+    }
+  }
+};
+
 const insertEmoji = (state, position, emojiData, needsSpace) => {
   const oldText = state.get('text');
   const emoji = needsSpace ? ' ' + emojiData.native : emojiData.native;
@@ -210,8 +260,57 @@ const insertEmoji = (state, position, emojiData, needsSpace) => {
   });
 };
 
+const insertExpiration = (state, position, data) => {
+  const oldText = state.get('text');
+
+  return state.merge({
+    text: `${oldText.slice(0, position)} ${data} ${oldText.slice(position)}`,
+    focusDate: new Date(),
+    caretPosition: position + data.length + 2,
+    idempotencyKey: uuid(),
+  });
+};
+
+const insertFeaturedTag = insertExpiration;
+
+const insertReference = (state, url, attributeType) => {
+  const oldText = state.get('text');
+  const attribute = attributeType || 'BT';
+
+  if (oldText.indexOf(`${attribute} ${url}`) >= 0) {
+    return state;
+  }
+
+  let newLine = '\n\n';
+  if (oldText.length === 0) newLine = '';
+  else if (oldText[oldText.length - 1] === '\n') {
+    if (oldText.length === 1 || oldText[oldText.length - 2] === '\n') {
+      newLine = '';
+    } else {
+      newLine = '\n';
+    }
+  }
+
+  if (oldText.length > 0) {
+    const lastLine = oldText.slice(oldText.lastIndexOf('\n') + 1, oldText.length - 1);
+    if (lastLine.startsWith(`${attribute} `)) {
+      newLine = '\n';
+    }
+  }
+
+  const referenceText = `${newLine}${attribute} ${url}`;
+  const text = `${oldText}${referenceText}`;
+
+  return state.merge({
+    text,
+    focusDate: new Date(),
+    caretPosition: text.length - referenceText.length,
+    idempotencyKey: uuid(),
+  });
+};
+
 const privacyPreference = (a, b) => {
-  const order = ['public', 'unlisted', 'private', 'direct'];
+  const order = ['public', 'public_unlisted', 'unlisted', 'login', 'private', 'direct'];
   return order[Math.max(order.indexOf(a), order.indexOf(b), 0)];
 };
 
@@ -323,21 +422,11 @@ export const composeReducer = (state = initialState, action) => {
   case STORE_HYDRATE:
     return hydrate(state, action.state.get('compose'));
   case COMPOSE_MOUNT:
-    return state
-      .set('mounted', state.get('mounted') + 1)
-      .set('should_redirect_to_compose_page', false);
+    return state.set('mounted', state.get('mounted') + 1);
   case COMPOSE_UNMOUNT:
     return state
       .set('mounted', Math.max(state.get('mounted') - 1, 0))
-      .set('is_composing', false)
-      .set(
-        'should_redirect_to_compose_page',
-        (state.get('mounted') === 1 &&
-          state.get('is_composing') === true &&
-          (state.get('text').trim() !== '' ||
-          state.get('media_attachments').size > 0)
-        )
-      );
+      .set('is_composing', false);
   case COMPOSE_SENSITIVITY_CHANGE:
     return state.withMutations(map => {
       if (!state.get('spoiler')) {
@@ -360,9 +449,18 @@ export const composeReducer = (state = initialState, action) => {
     return state
       .set('spoiler_text', action.text)
       .set('idempotencyKey', uuid());
+  case COMPOSE_MARKDOWN_CHANGE:
+    return state.withMutations(map => {
+      map.set('markdown', !state.get('markdown'));
+      map.set('idempotencyKey', uuid());
+    });
   case COMPOSE_VISIBILITY_CHANGE:
     return state
       .set('privacy', action.value)
+      .set('idempotencyKey', uuid());
+  case COMPOSE_SEARCHABILITY_CHANGE:
+    return state
+      .set('searchability', action.value)
       .set('idempotencyKey', uuid());
   case COMPOSE_CHANGE:
     return state
@@ -375,7 +473,14 @@ export const composeReducer = (state = initialState, action) => {
       map.set('id', null);
       map.set('in_reply_to', action.status.get('id'));
       map.set('text', statusToTextMentions(state, action.status));
-      map.set('privacy', privacyPreference(action.status.get('visibility'), state.get('default_privacy')));
+      map.set('reply_to_limited', action.status.get('visibility_ex') === 'limited');
+      if (action.status.get('visibility_ex') === 'limited') {
+        map.set('privacy', 'reply');
+      } else {
+        map.set('privacy', privacyPreference(action.status.get('visibility_ex'), state.get('default_privacy')));
+      }
+      map.set('limited_scope', null);
+      map.set('searchability', privacyPreference(action.status.get('searchability'), state.get('default_searchability')));
       map.set('focusDate', new Date());
       map.set('caretPosition', null);
       map.set('preselectDate', new Date());
@@ -400,6 +505,8 @@ export const composeReducer = (state = initialState, action) => {
         map.set('spoiler', false);
         map.set('spoiler_text', '');
       }
+
+      normalizePrivacy(map);
     });
   case COMPOSE_SUBMIT_REQUEST:
     return state.set('is_submitting', true);
@@ -453,6 +560,7 @@ export const composeReducer = (state = initialState, action) => {
     return state.withMutations(map => {
       map.update('text', text => [text.trim(), `@${action.account.get('acct')} `].filter((str) => str.length !== 0).join(' '));
       map.set('privacy', 'direct');
+      normalizePrivacy(map, true);
       map.set('focusDate', new Date());
       map.set('caretPosition', null);
       map.set('idempotencyKey', uuid());
@@ -471,7 +579,11 @@ export const composeReducer = (state = initialState, action) => {
     return state.set('tagHistory', fromJS(action.tags));
   case timelineDelete.type:
     if (action.payload.statusId === state.get('in_reply_to')) {
-      return state.set('in_reply_to', null);
+      if (state.get('privacy') === 'reply') {
+        return state.set('in_reply_to', null).set('privacy', 'circle');
+      } else {
+        return state.set('in_reply_to', null);
+      }
     } else if (action.payload.statusId === state.get('id')) {
       return state.set('id', null);
     } else {
@@ -479,17 +591,27 @@ export const composeReducer = (state = initialState, action) => {
     }
   case COMPOSE_EMOJI_INSERT:
     return insertEmoji(state, action.position, action.emoji, action.needsSpace);
+  case COMPOSE_EXPIRATION_INSERT:
+    return insertExpiration(state, action.position, action.data);
+  case COMPOSE_FEATURED_TAG_INSERT:
+    return insertFeaturedTag(state, action.position, action.data);
+  case COMPOSE_REFERENCE_INSERT:
+    return insertReference(state, action.url, action.attributeType);
   case REDRAFT:
     return state.withMutations(map => {
       map.set('text', action.raw_text || unescapeHTML(expandMentions(action.status)));
       map.set('in_reply_to', action.status.get('in_reply_to_id'));
-      map.set('privacy', action.status.get('visibility'));
+      map.set('privacy', action.status.get('visibility_ex'));
+      normalizePrivacy(map);
+      map.set('reply_to_limited', action.status.get('limited_scope') === 'reply');
+      map.set('limited_scope', null);
       map.set('media_attachments', action.status.get('media_attachments').map((media) => media.set('unattached', true)));
       map.set('focusDate', new Date());
       map.set('caretPosition', null);
       map.set('idempotencyKey', uuid());
       map.set('sensitive', action.status.get('sensitive'));
       map.set('language', action.status.get('language'));
+      map.set('markdown', action.status.get('markdown'));
       map.set('id', null);
 
       if (action.status.get('spoiler_text').length > 0) {
@@ -502,9 +624,9 @@ export const composeReducer = (state = initialState, action) => {
 
       if (action.status.get('poll')) {
         map.set('poll', ImmutableMap({
-          options: ImmutableList(action.status.get('poll').options.map(x => x.title)),
-          multiple: action.status.get('poll').multiple,
-          expires_in: expiresInFromExpiresAt(action.status.get('poll').expires_at),
+          options: action.status.getIn(['poll', 'options']).map(x => x.get('title')),
+          multiple: action.status.getIn(['poll', 'multiple']),
+          expires_in: expiresInFromExpiresAt(action.status.getIn(['poll', 'expires_at'])),
         }));
       }
     });
@@ -513,27 +635,34 @@ export const composeReducer = (state = initialState, action) => {
       map.set('id', action.status.get('id'));
       map.set('text', action.text);
       map.set('in_reply_to', action.status.get('in_reply_to_id'));
-      map.set('privacy', action.status.get('visibility'));
+      if (action.status.get('visibility_ex') !== 'limited') {
+        map.set('privacy', action.status.get('visibility_ex'));
+      } else {
+        map.set('privacy', action.status.get('limited_scope') || 'circle');
+      }
+      map.set('reply_to_limited', action.status.get('limited_scope') === 'reply');
+      map.set('limited_scope', action.status.get('limited_scope'));
       map.set('media_attachments', action.status.get('media_attachments'));
       map.set('focusDate', new Date());
       map.set('caretPosition', null);
       map.set('idempotencyKey', uuid());
       map.set('sensitive', action.status.get('sensitive'));
       map.set('language', action.status.get('language'));
+      map.set('markdown', action.status.get('markdown'));
 
       if (action.spoiler_text.length > 0) {
         map.set('spoiler', true);
         map.set('spoiler_text', action.spoiler_text);
       } else {
-        map.set('spoiler', false);
+        map.set('spoiler', action.status.get('sensitive'));
         map.set('spoiler_text', '');
       }
 
       if (action.status.get('poll')) {
         map.set('poll', ImmutableMap({
-          options: ImmutableList(action.status.get('poll').options.map(x => x.title)),
-          multiple: action.status.get('poll').multiple,
-          expires_in: expiresInFromExpiresAt(action.status.get('poll').expires_at),
+          options: action.status.getIn(['poll', 'options']).map(x => x.get('title')),
+          multiple: action.status.getIn(['poll', 'multiple']),
+          expires_in: expiresInFromExpiresAt(action.status.getIn(['poll', 'expires_at'])),
         }));
       }
     });
@@ -545,6 +674,8 @@ export const composeReducer = (state = initialState, action) => {
     return updatePoll(state, action.index, action.title, action.maxOptions);
   case COMPOSE_POLL_SETTINGS_CHANGE:
     return state.update('poll', poll => poll.set('expires_in', action.expiresIn).set('multiple', action.isMultiple));
+  case COMPOSE_CIRCLE_CHANGE:
+    return state.set('circle_id', action.circleId);
   case COMPOSE_LANGUAGE_CHANGE:
     return state.set('language', action.language);
   case COMPOSE_FOCUS:

@@ -3,28 +3,43 @@ import { PureComponent } from 'react';
 
 import { defineMessages, injectIntl, FormattedMessage } from 'react-intl';
 
+import classNames from 'classnames';
 import { Helmet } from 'react-helmet';
 
+import { List as ImmutableList } from 'immutable';
 import ImmutablePropTypes from 'react-immutable-proptypes';
 import { connect } from 'react-redux';
 
+import ChevronRightIcon from '@/material-icons/400-24px/chevron_right.svg?react';
+import DisabledIcon from '@/material-icons/400-24px/close-fill.svg?react';
+import EnabledIcon from '@/material-icons/400-24px/done-fill.svg?react';
+import ExpandMoreIcon from '@/material-icons/400-24px/expand_more.svg?react';
 import { fetchServer, fetchExtendedDescription, fetchDomainBlocks  } from 'mastodon/actions/server';
 import { Account } from 'mastodon/components/account';
 import Column from 'mastodon/components/column';
+import { Icon  }  from 'mastodon/components/icon';
 import { ServerHeroImage } from 'mastodon/components/server_hero_image';
 import { Skeleton } from 'mastodon/components/skeleton';
 import { LinkFooter} from 'mastodon/features/ui/components/link_footer';
 
-import { Section } from './components/section';
-import { RulesSection } from './components/rules';
-
 const messages = defineMessages({
   title: { id: 'column.about', defaultMessage: 'About' },
+  rules: { id: 'about.rules', defaultMessage: 'Server rules' },
   blocks: { id: 'about.blocks', defaultMessage: 'Moderated servers' },
+  fullTextSearch: { id: 'about.full_text_search', defaultMessage: 'Full text search' },
+  localTimeline: { id: 'column.community', defaultMessage: 'Local timeline' },
+  noop: { id: 'about.domain_blocks.noop.title', defaultMessage: 'Soft limited' },
+  noopExplanation: { id: 'about.domain_blocks.noop.explanation', defaultMessage: 'This server is limited partically.' },
   silenced: { id: 'about.domain_blocks.silenced.title', defaultMessage: 'Limited' },
   silencedExplanation: { id: 'about.domain_blocks.silenced.explanation', defaultMessage: 'You will generally not see profiles and content from this server, unless you explicitly look it up or opt into it by following.' },
   suspended: { id: 'about.domain_blocks.suspended.title', defaultMessage: 'Suspended' },
   suspendedExplanation: { id: 'about.domain_blocks.suspended.explanation', defaultMessage: 'No data from this server will be processed, stored or exchanged, making any interaction or communication with users from this server impossible.' },
+  publicUnlistedVisibility: { id: 'privacy.public_unlisted.short', defaultMessage: 'Local public' },
+  publicVisibility: { id: 'about.public_visibility', defaultMessage: 'Public visibility' },
+  emojiReaction: { id: 'status.emoji_reaction', defaultMessage: 'Emoji reaction' },
+  enabled: { id: 'about.enabled', defaultMessage: 'Enabled' },
+  disabled: { id: 'about.disabled', defaultMessage: 'Disabled' },
+  capabilities: { id: 'about.kmyblue_capabilities', defaultMessage: 'Features available in this server' },
 });
 
 const severityMessages = {
@@ -37,20 +52,84 @@ const severityMessages = {
     title: messages.suspended,
     explanation: messages.suspendedExplanation,
   },
+
+  noop: {
+    title: messages.noop,
+    explanation: messages.noopExplanation,
+  },
 };
 
 const mapStateToProps = state => ({
   server: state.getIn(['server', 'server']),
-  locale: state.getIn(['meta', 'locale']),
   extendedDescription: state.getIn(['server', 'extendedDescription']),
   domainBlocks: state.getIn(['server', 'domainBlocks']),
 });
+
+class Section extends PureComponent {
+
+  static propTypes = {
+    title: PropTypes.string,
+    children: PropTypes.node,
+    open: PropTypes.bool,
+    onOpen: PropTypes.func,
+  };
+
+  state = {
+    collapsed: !this.props.open,
+  };
+
+  handleClick = () => {
+    const { onOpen } = this.props;
+    const { collapsed } = this.state;
+
+    this.setState({ collapsed: !collapsed }, () => onOpen && onOpen());
+  };
+
+  render () {
+    const { title, children } = this.props;
+    const { collapsed } = this.state;
+
+    return (
+      <div className={classNames('about__section', { active: !collapsed })}>
+        <div className='about__section__title' role='button' tabIndex={0} onClick={this.handleClick}>
+          <Icon id={collapsed ? 'chevron-right' : 'chevron-down'} icon={collapsed ? ChevronRightIcon : ExpandMoreIcon} /> {title}
+        </div>
+
+        {!collapsed && (
+          <div className='about__section__body'>{children}</div>
+        )}
+      </div>
+    );
+  }
+
+}
+
+class CapabilityIcon extends PureComponent {
+
+  static propTypes = {
+    intl: PropTypes.object.isRequired,
+    state: PropTypes.bool,
+  };
+
+  render () {
+    const { intl, state } = this.props;
+
+    if (state) {
+      return (
+        <span className='capability-icon enabled'><Icon id='check' icon={EnabledIcon} title={intl.formatMessage(messages.enabled)} />{intl.formatMessage(messages.enabled)}</span>
+      );
+    } else {
+      return (
+        <span className='capability-icon disabled'><Icon id='times' icon={DisabledIcon} title={intl.formatMessage(messages.disabled)} />{intl.formatMessage(messages.disabled)}</span>
+      );
+    }
+  }
+}
 
 class About extends PureComponent {
 
   static propTypes = {
     server: ImmutablePropTypes.map,
-    locale: ImmutablePropTypes.string,
     extendedDescription: ImmutablePropTypes.map,
     domainBlocks: ImmutablePropTypes.contains({
       isLoading: PropTypes.bool,
@@ -74,8 +153,19 @@ class About extends PureComponent {
   };
 
   render () {
-    const { multiColumn, intl, server, extendedDescription, domainBlocks, locale } = this.props;
+    const { multiColumn, intl, server, extendedDescription, domainBlocks } = this.props;
     const isLoading = server.get('isLoading');
+
+    const fedibirdCapabilities = server.get('fedibird_capabilities') || [];   // thinking about isLoading is true
+    const isPublicUnlistedVisibility = fedibirdCapabilities.includes('kmyblue_visibility_public_unlisted');
+    const isPublicVisibility = !fedibirdCapabilities.includes('kmyblue_no_public_visibility');
+    const isEmojiReaction = fedibirdCapabilities.includes('emoji_reaction');
+    const isLocalTimeline = !fedibirdCapabilities.includes('timeline_no_local');
+
+    const isFullTextSearch = server.getIn(['configuration', 'search', 'enabled']);
+
+    const email = server.getIn(['contact', 'email']) || '';
+    const emailLink = email.startsWith('https://') ? email : `mailto:${email}`;
 
     return (
       <Column bindToDocument={!multiColumn} label={intl.formatMessage(messages.title)}>
@@ -98,7 +188,7 @@ class About extends PureComponent {
             <div className='about__meta__column'>
               <h4><FormattedMessage id='about.contact' defaultMessage='Contact:' /></h4>
 
-              {isLoading ? <Skeleton width='10ch' /> : <a className='about__mail' href={`mailto:${server.getIn(['contact', 'email'])}`}>{server.getIn(['contact', 'email'])}</a>}
+              {isLoading ? <Skeleton width='10ch' /> : <a className='about__mail' href={emailLink}>{server.getIn(['contact', 'email'])}</a>}
             </div>
           </div>
 
@@ -123,7 +213,43 @@ class About extends PureComponent {
             ))}
           </Section>
 
-          <RulesSection />
+          <Section title={intl.formatMessage(messages.rules)}>
+            {!isLoading && (server.get('rules', ImmutableList()).isEmpty() ? (
+              <p><FormattedMessage id='about.not_available' defaultMessage='This information has not been made available on this server.' /></p>
+            ) : (
+              <ol className='rules-list'>
+                {server.get('rules').map(rule => (
+                  <li key={rule.get('id')}>
+                    <div className='rules-list__text'>{rule.get('text')}</div>
+                    {rule.get('hint').length > 0 && (<div className='rules-list__hint'>{rule.get('hint')}</div>)}
+                  </li>
+                ))}
+              </ol>
+            ))}
+          </Section>
+
+          <Section title={intl.formatMessage(messages.capabilities)}>
+            <p><FormattedMessage id='about.kmyblue_capability' defaultMessage='This server is using kmyblue, a fork of Mastodon. On this server, kmyblues unique features are configured as follows.' /></p>
+            {!isLoading && (
+              <ol className='rules-list'>
+                <li>
+                  <span className='rules-list__text'>{intl.formatMessage(messages.emojiReaction)}: <CapabilityIcon state={isEmojiReaction} intl={intl} /></span>
+                </li>
+                <li>
+                  <span className='rules-list__text'>{intl.formatMessage(messages.publicVisibility)}: <CapabilityIcon state={isPublicVisibility} intl={intl} /></span>
+                </li>
+                <li>
+                  <span className='rules-list__text'>{intl.formatMessage(messages.publicUnlistedVisibility)}: <CapabilityIcon state={isPublicUnlistedVisibility} intl={intl} /></span>
+                </li>
+                <li>
+                  <span className='rules-list__text'>{intl.formatMessage(messages.localTimeline)}: <CapabilityIcon state={isLocalTimeline} intl={intl} /></span>
+                </li>
+                <li>
+                  <span className='rules-list__text'>{intl.formatMessage(messages.fullTextSearch)}: <CapabilityIcon state={isFullTextSearch} intl={intl} /></span>
+                </li>
+              </ol>
+            )}
+          </Section>
 
           <Section title={intl.formatMessage(messages.blocks)} onOpen={this.handleDomainBlocksOpen}>
             {domainBlocks.get('isLoading') ? (
@@ -142,7 +268,7 @@ class About extends PureComponent {
                       <div className='about__domain-blocks__domain' key={block.get('domain')}>
                         <div className='about__domain-blocks__domain__header'>
                           <h6><span title={`SHA-256: ${block.get('digest')}`}>{block.get('domain')}</span></h6>
-                          <span className='about__domain-blocks__domain__type' title={intl.formatMessage(severityMessages[block.get('severity')].explanation)}>{intl.formatMessage(severityMessages[block.get('severity')].title)}</span>
+                          <span className='about__domain-blocks__domain__type' title={intl.formatMessage(severityMessages[block.get('severity')].explanation)}>{intl.formatMessage(severityMessages[block.get('severity_ex') || block.get('severity')].title)}</span>
                         </div>
 
                         <p>{(block.get('comment') || '').length > 0 ? block.get('comment') : <FormattedMessage id='about.domain_blocks.no_reason_available' defaultMessage='Reason not available' />}</p>

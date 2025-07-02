@@ -16,6 +16,10 @@ const messages = defineMessages({
     id: 'notification.moderation_warning.action_disable',
     defaultMessage: 'Your account has been disabled.',
   },
+  force_cw: {
+    id: 'notification.moderation_warning.action_force_cw',
+    defaultMessage: 'Some of your posts have been added content-warning text.',
+  },
   mark_statuses_as_sensitive: {
     id: 'notification.moderation_warning.action_mark_statuses_as_sensitive',
     defaultMessage: 'Some of your posts have been marked as sensitive.',

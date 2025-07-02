@@ -1,9 +1,8 @@
 import { IntlMessageFormat } from 'intl-messageformat';
 
 import { unescape } from 'lodash';
-// see config/vite/plugins/sw-locales
-// it needs to be updated when new locale keys are used in this file
-import locales from "virtual:mastodon-sw-locales";
+
+import locales from './web_push_locales';
 
 const MAX_NOTIFICATIONS = 5;
 const GROUP_TAG = 'tag';

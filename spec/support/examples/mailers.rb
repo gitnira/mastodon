@@ -21,7 +21,7 @@ RSpec::Matchers.define :have_thread_headers do
       .and(have_header('References', conversation_header_regex))
   end
 
-  def conversation_header_regex = /<conversation-\d+.\d\d\d\d-\d\d-\d\d@#{Regexp.quote(Rails.configuration.x.local_domain)}>/
+  def conversation_header_regex = /<conversation-\d+.\d\d\d\d-\d\d-\d\d@cb6e6126.ngrok.io>/
 end
 
 RSpec::Matchers.define :have_standard_headers do |type|

@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe SearchQueryTransformer do
-  subject { described_class.new.apply(parser, current_account: account) }
+  subject { described_class.new.apply(parser, current_account: account, searchability: :public) }
 
   let(:account) { Fabricate(:account) }
   let(:parser) { SearchQueryParser.new.parse(query) }
@@ -127,26 +127,6 @@ RSpec.describe SearchQueryTransformer do
       it_behaves_like 'date operator', 'during' do
         let(:statement_operations) { [:gte, :lte] }
       end
-    end
-  end
-
-  context 'with multiple prefix clauses before a search term' do
-    let(:query) { 'from:me has:media foo' }
-
-    it 'transforms clauses' do
-      expect(subject.send(:must_clauses).map(&:term)).to contain_exactly('foo')
-      expect(subject.send(:must_not_clauses)).to be_empty
-      expect(subject.send(:filter_clauses).map(&:prefix)).to contain_exactly('from', 'has')
-    end
-  end
-
-  context 'with a search term between two prefix clauses' do
-    let(:query) { 'from:me foo has:media' }
-
-    it 'transforms clauses' do
-      expect(subject.send(:must_clauses).map(&:term)).to contain_exactly('foo')
-      expect(subject.send(:must_not_clauses)).to be_empty
-      expect(subject.send(:filter_clauses).map(&:prefix)).to contain_exactly('from', 'has')
     end
   end
 end

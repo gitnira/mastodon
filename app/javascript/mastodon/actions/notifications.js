@@ -11,6 +11,7 @@ import {
 import { submitMarkers } from './markers';
 import { notificationsUpdate } from "./notifications_typed";
 import { register as registerPushNotifications } from './push_notifications';
+import { STATUS_EMOJI_REACTION_UPDATE } from './statuses';
 
 export * from "./notifications_typed";
 
@@ -19,10 +20,30 @@ export const NOTIFICATIONS_FILTER_SET = 'NOTIFICATIONS_FILTER_SET';
 export const NOTIFICATIONS_SET_BROWSER_SUPPORT    = 'NOTIFICATIONS_SET_BROWSER_SUPPORT';
 export const NOTIFICATIONS_SET_BROWSER_PERMISSION = 'NOTIFICATIONS_SET_BROWSER_PERMISSION';
 
-defineMessages({
-  mention: { id: 'notification.mention', defaultMessage: '{name} mentioned you' },
+const messages = defineMessages({
+  // mention: { id: 'notification.mention', defaultMessage: '{name} mentioned you' },
   group: { id: 'notifications.group', defaultMessage: '{count} notifications' },
+  'message_admin.report': { id: 'notification.admin.report', defaultMessage: '{name} reported {target}' },
+  'message_admin.sign_up': { id: 'notification.admin.sign_up', defaultMessage: '{name} signed up' },
+  message_emoji_reaction: { id: 'notification.emoji_reaction', defaultMessage: '{name} reacted your post with emoji' },
+  message_favourite: { id: 'notification.favourite', defaultMessage: '{name} favorited your post' },
+  message_follow: { id: 'notification.follow', defaultMessage: '{name} followed you' },
+  message_list_status: { id: 'notification.list_status', defaultMessage: '{name} post is added to {listName}' },
+  message_mention: { id: 'notification.mention', defaultMessage: 'Mention' },
+  message_poll: { id: 'notification.poll', defaultMessage: 'A poll you voted in has ended' },
+  message_reblog: { id: 'notification.reblog', defaultMessage: '{name} boosted your post' },
+  message_status: { id: 'notification.status', defaultMessage: '{name} just posted' },
+  message_status_reference: { id: 'notification.status_reference', defaultMessage: '{name} quoted your post' },
+  message_update: { id: 'notification.update', defaultMessage: '{name} edited a post' },
 });
+
+export function updateEmojiReactions(emoji_reaction) {
+  return (dispatch) =>
+    dispatch({
+      type: STATUS_EMOJI_REACTION_UPDATE,
+      emoji_reaction,
+    });
+}
 
 export function updateNotifications(notification, intlMessages, intlLocale) {
   return (dispatch, getState) => {
@@ -53,7 +74,11 @@ export function updateNotifications(notification, intlMessages, intlLocale) {
 
     // Desktop notifications
     if (typeof window.Notification !== 'undefined' && showAlert && !filtered) {
-      const title = new IntlMessageFormat(intlMessages[`notification.${notification.type}`], intlLocale).format({ name: notification.account.display_name.length > 0 ? notification.account.display_name : notification.account.username });
+      const messageTemplate = intlMessages[`notification.${notification.type}`] || messages[`message_${notification.type}`] || '[NO MESSAGE DEFINITION]';
+      const title = new IntlMessageFormat(messageTemplate, intlLocale).format({
+        name: notification.account.display_name.length > 0 ? notification.account.display_name : notification.account.username,
+        listName: notification.list && notification.list.title,
+      });
       const body  = (notification.status && notification.status.spoiler_text.length > 0) ? notification.status.spoiler_text : unescapeHTML(notification.status ? notification.status.content : '');
 
       const notify = new Notification(title, { body, icon: notification.account.avatar, tag: notification.id });

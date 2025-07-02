@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module WellKnown
-  class OAuthMetadataController < ActionController::Base # rubocop:disable Rails/ApplicationController
+  class OauthMetadataController < ActionController::Base # rubocop:disable Rails/ApplicationController
     include CacheConcern
 
     # Prevent `active_model_serializer`'s `ActionController::Serialization` from calling `current_user`
@@ -13,8 +13,8 @@ module WellKnown
       # new OAuth scopes are added), we don't use expires_in to cache upstream,
       # instead just caching in the rails cache:
       render_with_cache(
-        json: ::OAuthMetadataPresenter.new,
-        serializer: ::OAuthMetadataSerializer,
+        json: ::OauthMetadataPresenter.new,
+        serializer: ::OauthMetadataSerializer,
         content_type: 'application/json',
         expires_in: 15.minutes
       )

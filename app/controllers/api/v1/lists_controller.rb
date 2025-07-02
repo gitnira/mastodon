@@ -7,6 +7,10 @@ class Api::V1::ListsController < Api::BaseController
   before_action :require_user!
   before_action :set_list, except: [:index, :create]
 
+  rescue_from ArgumentError do |e|
+    render json: { error: e.to_s }, status: 422
+  end
+
   def index
     @lists = List.where(account: current_account).all
     render json: @lists, each_serializer: REST::ListSerializer
@@ -27,8 +31,21 @@ class Api::V1::ListsController < Api::BaseController
   end
 
   def destroy
+    antenna = Antenna.find_by(list_id: @list.id)
+    antenna.update!(list_id: 0) if antenna.present?
+
     @list.destroy!
     render_empty
+  end
+
+  def favourite
+    @list.favourite!
+    render json: @list, serializer: REST::ListSerializer
+  end
+
+  def unfavourite
+    @list.unfavourite!
+    render json: @list, serializer: REST::ListSerializer
   end
 
   private
@@ -38,6 +55,6 @@ class Api::V1::ListsController < Api::BaseController
   end
 
   def list_params
-    params.permit(:title, :replies_policy, :exclusive)
+    params.permit(:title, :replies_policy, :exclusive, :notify, :favourite)
   end
 end

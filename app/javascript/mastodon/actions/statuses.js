@@ -1,13 +1,12 @@
 import { browserHistory } from 'mastodon/components/router';
+import { me } from 'mastodon/initial_state';
 
 import api from '../api';
 
+import { fetchRelationships } from './accounts';
 import { ensureComposeIsVisible, setComposeToStatus } from './compose';
 import { importFetchedStatus, importFetchedStatuses, importFetchedAccount } from './importer';
-import { fetchContext } from './statuses_typed';
 import { deleteFromTimelines } from './timelines';
-
-export * from './statuses_typed';
 
 export const STATUS_FETCH_REQUEST = 'STATUS_FETCH_REQUEST';
 export const STATUS_FETCH_SUCCESS = 'STATUS_FETCH_SUCCESS';
@@ -16,6 +15,10 @@ export const STATUS_FETCH_FAIL    = 'STATUS_FETCH_FAIL';
 export const STATUS_DELETE_REQUEST = 'STATUS_DELETE_REQUEST';
 export const STATUS_DELETE_SUCCESS = 'STATUS_DELETE_SUCCESS';
 export const STATUS_DELETE_FAIL    = 'STATUS_DELETE_FAIL';
+
+export const CONTEXT_FETCH_REQUEST = 'CONTEXT_FETCH_REQUEST';
+export const CONTEXT_FETCH_SUCCESS = 'CONTEXT_FETCH_SUCCESS';
+export const CONTEXT_FETCH_FAIL    = 'CONTEXT_FETCH_FAIL';
 
 export const STATUS_MUTE_REQUEST = 'STATUS_MUTE_REQUEST';
 export const STATUS_MUTE_SUCCESS = 'STATUS_MUTE_SUCCESS';
@@ -40,6 +43,8 @@ export const STATUS_TRANSLATE_SUCCESS = 'STATUS_TRANSLATE_SUCCESS';
 export const STATUS_TRANSLATE_FAIL    = 'STATUS_TRANSLATE_FAIL';
 export const STATUS_TRANSLATE_UNDO    = 'STATUS_TRANSLATE_UNDO';
 
+export const STATUS_EMOJI_REACTION_UPDATE = 'STATUS_EMOJI_REACTION_UPDATE';
+
 export function fetchStatusRequest(id, skipLoading) {
   return {
     type: STATUS_FETCH_REQUEST,
@@ -53,7 +58,7 @@ export function fetchStatus(id, forceFetch = false, alsoFetchContext = true) {
     const skipLoading = !forceFetch && getState().getIn(['statuses', id], null) !== null;
 
     if (alsoFetchContext) {
-      dispatch(fetchContext({ statusId: id }));
+      dispatch(fetchContext(id));
     }
 
     if (skipLoading) {
@@ -64,6 +69,12 @@ export function fetchStatus(id, forceFetch = false, alsoFetchContext = true) {
 
     api().get(`/api/v1/statuses/${id}`).then(response => {
       dispatch(importFetchedStatus(response.data));
+
+      const accountId = response.data.account.id;
+      if (me && !getState().getIn(['relationships', accountId])) {
+        dispatch(fetchRelationships([accountId]));
+      }
+
       dispatch(fetchStatusSuccess(skipLoading));
     }).catch(error => {
       dispatch(fetchStatusFail(id, error, skipLoading));
@@ -176,6 +187,51 @@ export function deleteStatusFail(id, error) {
 
 export const updateStatus = status => dispatch =>
   dispatch(importFetchedStatus(status));
+
+export function fetchContext(id) {
+  return (dispatch) => {
+    dispatch(fetchContextRequest(id));
+
+    api().get(`/api/v1/statuses/${id}/context?with_reference=1`).then(response => {
+      dispatch(importFetchedStatuses(response.data.ancestors.concat(response.data.descendants).concat(response.data.references)));
+      dispatch(fetchContextSuccess(id, response.data.ancestors, response.data.descendants, response.data.references));
+
+    }).catch(error => {
+      if (error.response && error.response.status === 404) {
+        dispatch(deleteFromTimelines(id));
+      }
+
+      dispatch(fetchContextFail(id, error));
+    });
+  };
+}
+
+export function fetchContextRequest(id) {
+  return {
+    type: CONTEXT_FETCH_REQUEST,
+    id,
+  };
+}
+
+export function fetchContextSuccess(id, ancestors, descendants, references) {
+  return {
+    type: CONTEXT_FETCH_SUCCESS,
+    id,
+    ancestors,
+    descendants,
+    references,
+    statuses: ancestors.concat(descendants),
+  };
+}
+
+export function fetchContextFail(id, error) {
+  return {
+    type: CONTEXT_FETCH_FAIL,
+    id,
+    error,
+    skipAlert: true,
+  };
+}
 
 export function muteStatus(id) {
   return (dispatch) => {
@@ -321,6 +377,11 @@ export const undoStatusTranslation = (id, pollId) => ({
   type: STATUS_TRANSLATE_UNDO,
   id,
   pollId,
+});
+
+export const updateEmojiReaction = (emoji_reaction) => ({
+  type: STATUS_EMOJI_REACTION_UPDATE,
+  emoji_reaction,
 });
 
 export const navigateToStatus = (statusId) => {

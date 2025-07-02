@@ -1,6 +1,6 @@
 import renderer from 'react-test-renderer';
 
-import { render, fireEvent, screen } from '@/testing/rendering';
+import { render, fireEvent, screen } from 'mastodon/test_helpers';
 
 import { Button } from '../button';
 
@@ -21,7 +21,7 @@ describe('<Button />', () => {
   });
 
   it('handles click events using the given handler', () => {
-    const handler = vi.fn();
+    const handler = jest.fn();
     render(<Button onClick={handler}>button</Button>);
     fireEvent.click(screen.getByText('button'));
 
@@ -29,7 +29,7 @@ describe('<Button />', () => {
   });
 
   it('does not handle click events if props.disabled given', () => {
-    const handler = vi.fn();
+    const handler = jest.fn();
     render(<Button onClick={handler} disabled>button</Button>);
     fireEvent.click(screen.getByText('button'));
 

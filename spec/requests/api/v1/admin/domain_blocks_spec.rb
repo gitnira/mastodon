@@ -56,6 +56,15 @@ RSpec.describe 'Domain Blocks' do
             private_comment: domain_block.private_comment,
             public_comment: domain_block.public_comment,
             obfuscate: domain_block.obfuscate,
+            block_trends: domain_block.block_trends,
+            reject_favourite: domain_block.reject_favourite,
+            reject_hashtag: domain_block.reject_hashtag,
+            detect_invalid_subscription: domain_block.detect_invalid_subscription,
+            reject_new_follow: domain_block.reject_new_follow,
+            reject_reply_exclude_followers: domain_block.reject_reply_exclude_followers,
+            reject_send_sensitive: domain_block.reject_send_sensitive,
+            reject_straight_follow: domain_block.reject_straight_follow,
+            reject_friend: domain_block.reject_friend,
           }
         end
       end
@@ -90,6 +99,29 @@ RSpec.describe 'Domain Blocks' do
 
     let!(:domain_block) { Fabricate(:domain_block) }
 
+    let(:expected_response) do
+      {
+        id: domain_block.id.to_s,
+        domain: domain_block.domain,
+        created_at: domain_block.created_at.strftime('%Y-%m-%dT%H:%M:%S.%LZ'),
+        severity: domain_block.severity.to_s,
+        reject_media: domain_block.reject_media,
+        reject_reports: domain_block.reject_reports,
+        private_comment: domain_block.private_comment,
+        public_comment: domain_block.public_comment,
+        obfuscate: domain_block.obfuscate,
+        block_trends: domain_block.block_trends,
+        reject_favourite: domain_block.reject_favourite,
+        reject_hashtag: domain_block.reject_hashtag,
+        detect_invalid_subscription: domain_block.detect_invalid_subscription,
+        reject_new_follow: domain_block.reject_new_follow,
+        reject_reply_exclude_followers: domain_block.reject_reply_exclude_followers,
+        reject_send_sensitive: domain_block.reject_send_sensitive,
+        reject_straight_follow: domain_block.reject_straight_follow,
+        reject_friend: domain_block.reject_friend,
+      }
+    end
+
     it_behaves_like 'forbidden for wrong scope', 'write:statuses'
     it_behaves_like 'forbidden for wrong role', ''
     it_behaves_like 'forbidden for wrong role', 'Moderator'
@@ -110,7 +142,16 @@ RSpec.describe 'Domain Blocks' do
         reject_reports: domain_block.reject_reports,
         private_comment: domain_block.private_comment,
         public_comment: domain_block.public_comment,
-        obfuscate: domain_block.obfuscate
+        obfuscate: domain_block.obfuscate,
+        block_trends: domain_block.block_trends,
+        reject_favourite: domain_block.reject_favourite,
+        reject_hashtag: domain_block.reject_hashtag,
+        detect_invalid_subscription: domain_block.detect_invalid_subscription,
+        reject_new_follow: domain_block.reject_new_follow,
+        reject_reply_exclude_followers: domain_block.reject_reply_exclude_followers,
+        reject_send_sensitive: domain_block.reject_send_sensitive,
+        reject_straight_follow: domain_block.reject_straight_follow,
+        reject_friend: domain_block.reject_friend
       )
     end
 

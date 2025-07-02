@@ -3,22 +3,27 @@
 class ActivityPub::NoteSerializer < ActivityPub::Serializer
   include FormattingHelper
 
-  context_extensions :atom_uri, :conversation, :sensitive, :voters_count
+  context_extensions :atom_uri, :conversation, :sensitive, :voters_count, :searchable_by, :references, :limited_scope, :quote_uri
 
   attributes :id, :type, :summary,
              :in_reply_to, :published, :url,
              :attributed_to, :to, :cc, :sensitive,
              :atom_uri, :in_reply_to_atom_uri,
-             :conversation
+             :conversation, :searchable_by, :context
 
   attribute :content
   attribute :content_map, if: :language?
   attribute :updated, if: :edited?
+  attribute :limited_scope, if: :limited_visibility?
+
+  attribute :quote_uri, if: :quote?
+  attribute :misskey_quote, key: :_misskey_quote, if: :quote?
 
   has_many :virtual_attachments, key: :attachment
   has_many :virtual_tags, key: :tag
 
   has_one :replies, serializer: ActivityPub::CollectionSerializer, if: :local?
+  has_one :references, serializer: ActivityPub::CollectionSerializer, if: :local?
   has_one :likes, serializer: ActivityPub::CollectionSerializer, if: :local?
   has_one :shares, serializer: ActivityPub::CollectionSerializer, if: :local?
 
@@ -50,6 +55,10 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
     { object.language => content }
   end
 
+  def context
+    ActivityPub::TagManager.instance.uri_for(object.conversation)
+  end
+
   def replies
     replies = object.self_replies(5).pluck(:id, :uri)
     last_id = replies.last&.first
@@ -62,6 +71,22 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
         part_of: ActivityPub::TagManager.instance.replies_uri_for(object),
         items: replies.map(&:second),
         next: last_id ? ActivityPub::TagManager.instance.replies_uri_for(object, page: true, min_id: last_id) : ActivityPub::TagManager.instance.replies_uri_for(object, page: true, only_other_accounts: true)
+      )
+    )
+  end
+
+  def references
+    refs = object.references.reorder(id: :asc).take(5).pluck(:id, :uri)
+    last_id = refs.last&.first
+
+    ActivityPub::CollectionPresenter.new(
+      type: :unordered,
+      id: ActivityPub::TagManager.instance.references_uri_for(object),
+      first: ActivityPub::CollectionPresenter.new(
+        type: :unordered,
+        part_of: ActivityPub::TagManager.instance.references_uri_for(object),
+        items: refs.map(&:second),
+        next: last_id ? ActivityPub::TagManager.instance.references_uri_for(object, page: true, min_id: last_id) : ActivityPub::TagManager.instance.references_uri_for(object, page: true, only_other_accounts: true)
       )
     )
   end
@@ -85,6 +110,8 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
   def language?
     object.language.present?
   end
+
+  delegate :limited_visibility?, to: :object
 
   delegate :edited?, to: :object
 
@@ -131,7 +158,30 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
   end
 
   def virtual_tags
-    object.active_mentions.to_a.sort_by(&:id) + object.tags + object.emojis
+    object.active_mentions.to_a.sort_by(&:id) + object.tags + object.emojis + virtual_tags_of_quote
+  end
+
+  class NoteLink < ActiveModelSerializers::Model
+    attributes :href
+  end
+
+  class NoteLinkSerializer < ActivityPub::Serializer
+    attributes :type, :href
+    attribute :media_type, key: :mediaType
+
+    def type
+      'Link'
+    end
+
+    def media_type
+      'application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
+    end
+  end
+
+  def virtual_tags_of_quote
+    return [] unless object.quote?
+
+    [NoteLink.new(href: quote_uri)]
   end
 
   def atom_uri
@@ -156,8 +206,30 @@ class ActivityPub::NoteSerializer < ActivityPub::Serializer
     end
   end
 
+  def searchable_by
+    ActivityPub::TagManager.instance.searchable_by(object)
+  end
+
+  def limited_scope
+    ActivityPub::TagManager.instance.limited_scope(object)
+  end
+
   def local?
     object.account.local?
+  end
+
+  delegate :quote?, to: :object
+
+  def quote_post
+    @quote_post ||= object.quote
+  end
+
+  def quote_uri
+    ActivityPub::TagManager.instance.uri_for(quote_post)
+  end
+
+  def misskey_quote
+    quote_uri
   end
 
   def poll_options

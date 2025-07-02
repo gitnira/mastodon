@@ -15,5 +15,4 @@ Fabricator(:account) do
   user                { |attrs| attrs[:domain].nil? ? Fabricate.build(:user, account: nil) : nil }
   uri                 { |attrs| attrs[:domain].nil? ? '' : "https://#{attrs[:domain]}/users/#{attrs[:username]}" }
   discoverable        true
-  indexable           true
 end

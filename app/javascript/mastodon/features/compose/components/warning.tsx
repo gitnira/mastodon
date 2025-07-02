@@ -8,21 +8,39 @@ import { me } from 'mastodon/initial_state';
 import { useAppSelector } from 'mastodon/store';
 import type { RootState } from 'mastodon/store';
 import { HASHTAG_PATTERN_REGEX } from 'mastodon/utils/hashtags';
+import { MENTION_PATTERN_REGEX } from 'mastodon/utils/mentions';
 
 const selector = createSelector(
   (state: RootState) => state.compose.get('privacy') as string,
   (state: RootState) => !!state.accounts.getIn([me, 'locked']),
   (state: RootState) => state.compose.get('text') as string,
-  (privacy, locked, text) => ({
+  (state: RootState) => state.compose.get('searchability') as string,
+  (state: RootState) => state.compose.get('limited_scope') as string,
+  (privacy, locked, text, searchability, limited_scope) => ({
     needsLockWarning: privacy === 'private' && !locked,
-    hashtagWarning: privacy !== 'public' && HASHTAG_PATTERN_REGEX.test(text),
+    hashtagWarning:
+      !['public', 'public_unlisted', 'login'].includes(privacy) &&
+      (privacy !== 'unlisted' || searchability !== 'public') &&
+      HASHTAG_PATTERN_REGEX.test(text),
     directMessageWarning: privacy === 'direct',
+    searchabilityWarning: searchability === 'limited',
+    mentionWarning:
+      ['mutual', 'circle', 'limited'].includes(privacy) &&
+      MENTION_PATTERN_REGEX.test(text),
+    limitedPostWarning:
+      ['mutual', 'circle'].includes(privacy) && !limited_scope,
   }),
 );
 
 export const Warning = () => {
-  const { needsLockWarning, hashtagWarning, directMessageWarning } =
-    useAppSelector(selector);
+  const {
+    needsLockWarning,
+    hashtagWarning,
+    directMessageWarning,
+    searchabilityWarning,
+    mentionWarning,
+    limitedPostWarning,
+  } = useAppSelector(selector);
   if (needsLockWarning) {
     return (
       <WarningMessage>
@@ -68,6 +86,39 @@ export const Warning = () => {
             defaultMessage='Learn more'
           />
         </a>
+      </WarningMessage>
+    );
+  }
+
+  if (searchabilityWarning) {
+    return (
+      <WarningMessage>
+        <FormattedMessage
+          id='compose_form.searchability_warning'
+          defaultMessage='Self only searchability is not available other mastodon servers. Others can search your post.'
+        />
+      </WarningMessage>
+    );
+  }
+
+  if (mentionWarning) {
+    return (
+      <WarningMessage>
+        <FormattedMessage
+          id='compose_form.mention_warning'
+          defaultMessage='When you add a mention to a limited post, the person you are mentioning can also see this post.'
+        />
+      </WarningMessage>
+    );
+  }
+
+  if (limitedPostWarning) {
+    return (
+      <WarningMessage>
+        <FormattedMessage
+          id='compose_form.limited_post_warning'
+          defaultMessage='Limited posts are NOT reached Misskey, normal Mastodon or so on.'
+        />
       </WarningMessage>
     );
   }

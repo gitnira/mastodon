@@ -13,8 +13,15 @@ RSpec.describe BlockDomainService do
   let!(:bad_attachment) { Fabricate(:media_attachment, account: bad_account, status: bad_status_with_attachment, file: attachment_fixture('attachment.jpg')) }
   let!(:already_banned_account) { Fabricate(:account, username: 'badguy', domain: 'evil.org', suspended: true, silenced: true) }
 
+  before do
+    Fabricate(:friend_domain, domain: 'evil.org', inbox_url: 'https://evil.org/inbox', active_state: :accepted, passive_state: :accepted)
+  end
+
   describe 'for a suspension' do
     before do
+      stub_request(:post, 'https://evil.org/inbox').with(body: hash_including({
+        type: 'Delete',
+      }))
       local_account.follow!(bad_account)
       bystander.follow!(local_account)
     end
@@ -45,6 +52,20 @@ RSpec.describe BlockDomainService do
 
       # Sends severed relationships notification
       expect(LocalNotificationWorker).to have_enqueued_sidekiq_job(local_account.id, anything, 'AccountRelationshipSeveranceEvent', 'severed_relationships')
+
+      # Removes remote friend from that domain
+      expect(FriendDomain.find_by(domain: 'evil.org')).to be_nil
+    end
+  end
+
+  describe 'for rejecting friend only' do
+    before do
+      stub_request(:post, 'https://evil.org/inbox')
+      subject.call(DomainBlock.create!(domain: 'evil.org', severity: :noop, reject_friend: true))
+    end
+
+    it 'removes remote friend from that domain' do
+      expect(FriendDomain.find_by(domain: 'evil.org')).to be_nil
     end
   end
 

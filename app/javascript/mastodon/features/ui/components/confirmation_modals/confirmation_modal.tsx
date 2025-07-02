@@ -13,7 +13,6 @@ export const ConfirmationModal: React.FC<
     title: React.ReactNode;
     message: React.ReactNode;
     confirm: React.ReactNode;
-    cancel?: React.ReactNode;
     secondary?: React.ReactNode;
     onSecondary?: () => void;
     onConfirm: () => void;
@@ -23,7 +22,6 @@ export const ConfirmationModal: React.FC<
   title,
   message,
   confirm,
-  cancel,
   onClose,
   onConfirm,
   secondary,
@@ -59,12 +57,10 @@ export const ConfirmationModal: React.FC<
       <div className='safety-action-modal__bottom'>
         <div className='safety-action-modal__actions'>
           <button onClick={handleCancel} className='link-button'>
-            {cancel ?? (
-              <FormattedMessage
-                id='confirmation_modal.cancel'
-                defaultMessage='Cancel'
-              />
-            )}
+            <FormattedMessage
+              id='confirmation_modal.cancel'
+              defaultMessage='Cancel'
+            />
           </button>
 
           {secondary && (

@@ -20,7 +20,9 @@ module Mastodon::CLI
     option :import, type: :boolean, default: true, desc: 'Import data from the database to the index'
     option :clean, type: :boolean, default: true, desc: 'Remove outdated documents from the index'
     option :reset_chewy, type: :boolean, default: false, desc: "Reset Chewy's internal index"
-    option :only_mapping, type: :boolean, default: false, desc: 'Update the index specification without re-index'
+    option :full, type: :boolean, default: false, desc: 'Import full data over Mastodon default importer'
+    option :from, type: :string, default: nil, desc: 'Statuses start date'
+    option :to, type: :string, default: nil, desc: 'Statuses end date'
     desc 'deploy', 'Create or upgrade Elasticsearch indices and populate them'
     long_desc <<~LONG_DESC
       If Elasticsearch is empty, this command will create the necessary indices
@@ -42,7 +44,7 @@ module Mastodon::CLI
                 end
 
       pool      = Concurrent::FixedThreadPool.new(options[:concurrency], max_queue: options[:concurrency] * 10)
-      importers = indices.index_with { |index| "Importer::#{index.name}Importer".constantize.new(batch_size: options[:batch_size], executor: pool) }
+      importers = indices.index_with { |index| "Importer::#{index.name}Importer".constantize.new(batch_size: options[:batch_size], executor: pool, full: options[:full], from: options[:from], to: options[:to]) }
       progress  = ProgressBar.create(
         {
           total: nil,
@@ -52,20 +54,6 @@ module Mastodon::CLI
       )
 
       Chewy::Stash::Specification.reset! if options[:reset_chewy]
-
-      if options[:only_mapping]
-        indices.select { |index| index.specification.changed? }.each do |index|
-          progress.title = "Updating mapping for #{index} "
-          index.update_specification
-          index.specification.lock!
-        end
-
-        progress.title = 'Done! '
-        progress.finish
-
-        say('Updated index mappings', :green, true)
-        return
-      end
 
       # First, ensure all indices are created and have the correct
       # structure, so that live data can already be written

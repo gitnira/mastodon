@@ -5,12 +5,22 @@ module Admin
     before_action :set_domain_block, only: [:destroy, :edit, :update]
 
     PERMITTED_PARAMS = %i(
+      block_trends
+      detect_invalid_subscription
       domain
+      hidden
       obfuscate
       private_comment
       public_comment
+      reject_favourite
+      reject_friend
+      reject_hashtag
       reject_media
+      reject_new_follow
+      reject_reply_exclude_followers
       reject_reports
+      reject_send_sensitive
+      reject_straight_follow
       severity
     ).freeze
 
@@ -119,7 +129,9 @@ module Admin
       params
         .expect(
           form_domain_block_batch: [
-            domain_blocks_attributes: [[:enabled, :domain, :severity, :reject_media, :reject_reports, :private_comment, :public_comment, :obfuscate]],
+            domain_blocks_attributes: [[:enabled, :domain, :severity, :reject_media, :reject_reports, :private_comment, :public_comment, :obfuscate,
+                                        :reject_favourite, :reject_reply_exclude_followers, :reject_send_sensitive, :reject_hashtag,
+                                        :reject_straight_follow, :reject_new_follow, :reject_friend, :block_trends, :detect_invalid_subscription, :hidden]],
           ]
         )
     end

@@ -2,6 +2,22 @@
 
 
 /**
+ * @typedef { 'blocking_quote'
+ *   | 'emoji_reaction_on_timeline'
+ *   | 'emoji_reaction_unavailable_server'
+ *   | 'emoji_reaction_count'
+ *   | 'favourite_menu'
+ *   | 'quote_in_home'
+ *   | 'quote_in_public'
+ *   | 'quote_unavailable_server'
+ *   | 'recent_emojis'
+ *   | 'relationships'
+ *   | 'status_reference_unavailable_server'
+ *   | 'avatar_on_filter'
+ * } HideItemsDefinition
+ */
+
+/**
  * @typedef {[code: string, name: string, localName: string]} InitialStateLanguage
  */
 
@@ -12,15 +28,23 @@
  * @property {boolean} auto_play_gif
  * @property {boolean} activity_api_enabled
  * @property {string} admin
+ * @property {boolean} bookmark_category_needed
  * @property {boolean=} boost_modal
  * @property {boolean=} delete_modal
  * @property {boolean=} missing_alt_text_modal
  * @property {boolean=} disable_swiping
  * @property {boolean=} disable_hover_cards
  * @property {string=} disabled_account_id
+ * @property {string[]} enabled_visibilities
  * @property {string} display_media
  * @property {string} domain
+ * @property {string} dtl_tag
+ * @property {boolean} enable_emoji_reaction
+ * @property {boolean} enable_local_timeline
+ * @property {boolean} enable_dtl_menu
  * @property {boolean=} expand_spoilers
+ * @property {string[]} featured_tags
+ * @property {HideItemsDefinition[]} hide_items
  * @property {boolean} limited_federation_mode
  * @property {string} locale
  * @property {string | null} mascot
@@ -29,10 +53,13 @@
  * @property {string=} owner
  * @property {boolean} profile_directory
  * @property {boolean} registrations_open
+ * @property {boolean} registrations_reach_limit
  * @property {boolean} reduce_motion
  * @property {string} repository
  * @property {boolean} search_enabled
  * @property {boolean} trends_enabled
+ * @property {boolean} simple_timeline_menu
+ * @property {boolean} boost_menu
  * @property {boolean} single_user_mode
  * @property {string} source_url
  * @property {string} streaming_api_base_url
@@ -85,17 +112,38 @@ export const hasMultiColumnPath = initialPath === '/'
  */
 const getMeta = (prop) => initialState?.meta && initialState.meta[prop];
 
+const hideItems = getMeta('hide_items');
+
+/**
+ * @param {HideItemsDefinition} key
+ * @returns {boolean}
+ */
+export const isHideItem = (key) => (hideItems && hideItems.includes(key)) || false;
+
+/**
+ * @param {HideItemsDefinition} key
+ * @returns {boolean}
+ */
+export const isShowItem = (key) => !isHideItem(key);
+
 export const activityApiEnabled = getMeta('activity_api_enabled');
 export const autoPlayGif = getMeta('auto_play_gif');
+export const bookmarkCategoryNeeded = getMeta('bookmark_category_needed');
 export const boostModal = getMeta('boost_modal');
 export const deleteModal = getMeta('delete_modal');
 export const missingAltTextModal = getMeta('missing_alt_text_modal');
 export const disableSwiping = getMeta('disable_swiping');
 export const disableHoverCards = getMeta('disable_hover_cards');
 export const disabledAccountId = getMeta('disabled_account_id');
+export const enabledVisibilites = getMeta('enabled_visibilities');
 export const displayMedia = getMeta('display_media');
 export const domain = getMeta('domain');
+export const dtlTag = getMeta('dtl_tag');
+export const enableEmojiReaction = getMeta('enable_emoji_reaction');
+export const enableLocalTimeline = getMeta('enable_local_timeline');
+export const enableDtlMenu = getMeta('enable_dtl_menu');
 export const expandSpoilers = getMeta('expand_spoilers');
+export const featuredTags = getMeta('featured_tags') || [];
 export const forceSingleColumn = !getMeta('advanced_layout');
 export const limitedFederationMode = getMeta('limited_federation_mode');
 export const mascot = getMeta('mascot');
@@ -105,10 +153,13 @@ export const owner = getMeta('owner');
 export const profile_directory = getMeta('profile_directory');
 export const reduceMotion = getMeta('reduce_motion');
 export const registrationsOpen = getMeta('registrations_open');
+export const registrationsReachLimit = getMeta('registrations_reach_limit');
 export const repository = getMeta('repository');
 export const searchEnabled = getMeta('search_enabled');
 export const trendsEnabled = getMeta('trends_enabled');
 export const showTrends = getMeta('show_trends');
+export const simpleTimelineMenu = getMeta('simple_timeline_menu');
+export const boostMenu = getMeta('boost_menu');
 export const singleUserMode = getMeta('single_user_mode');
 export const source_url = getMeta('source_url');
 export const timelinePreview = getMeta('timeline_preview');

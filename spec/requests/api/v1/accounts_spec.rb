@@ -78,26 +78,9 @@ RSpec.describe '/api/v1/accounts' do
     end
 
     let(:client_app) { Fabricate(:application) }
-    let(:token) { Fabricate(:client_credentials_token, application: client_app, scopes: 'read write') }
+    let(:token) { Doorkeeper::AccessToken.find_or_create_for(application: client_app, resource_owner: nil, scopes: 'read write', use_refresh_token: false) }
     let(:agreement) { nil }
     let(:date_of_birth) { nil }
-
-    context 'when not using client credentials token' do
-      let(:token) { Fabricate(:accessible_access_token, application: client_app, scopes: 'read write', resource_owner_id: user.id) }
-
-      it 'returns http forbidden error' do
-        subject
-
-        expect(response).to have_http_status(403)
-        expect(response.content_type)
-          .to start_with('application/json')
-
-        expect(response.parsed_body)
-          .to include(
-            error: 'This method requires an client credentials authentication'
-          )
-      end
-    end
 
     context 'when age verification is enabled' do
       before do
@@ -161,11 +144,19 @@ RSpec.describe '/api/v1/accounts' do
 
   describe 'POST /api/v1/accounts/:id/follow' do
     let(:scopes) { 'write:follows' }
+    let(:my_actor_type) { 'Person' }
+    let(:lock_follow_from_bot) { false }
     let(:other_account) { Fabricate(:account, username: 'bob', locked: locked) }
 
     context 'when posting to an other account' do
       subject do
         post "/api/v1/accounts/#{other_account.id}/follow", headers: headers
+      end
+
+      before do
+        other_account.user.settings['lock_follow_from_bot'] = lock_follow_from_bot
+        other_account.user.save!
+        user.account.update!(actor_type: my_actor_type)
       end
 
       context 'with unlocked account' do
@@ -205,6 +196,35 @@ RSpec.describe '/api/v1/accounts' do
               following: false,
               requested: true
             )
+
+          expect(user.account.requested?(other_account)).to be true
+        end
+
+        it_behaves_like 'forbidden for wrong scope', 'read:accounts'
+      end
+
+      context 'with unlocked account from bot' do
+        let(:locked) { false }
+        let(:lock_follow_from_bot) { true }
+        let(:my_actor_type) { 'Service' }
+
+        it 'returns http success' do
+          subject
+
+          expect(response).to have_http_status(200)
+        end
+
+        it 'returns JSON with following=false and requested=true' do
+          subject
+
+          json = response.parsed_body
+
+          expect(json[:following]).to be false
+          expect(json[:requested]).to be true
+        end
+
+        it 'creates a follow request relation between user and target user' do
+          subject
 
           expect(user.account.requested?(other_account)).to be true
         end

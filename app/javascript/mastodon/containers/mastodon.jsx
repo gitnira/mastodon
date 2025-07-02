@@ -7,7 +7,9 @@ import { Provider as ReduxProvider } from 'react-redux';
 
 import { ScrollContext } from 'react-router-scroll-4';
 
+import { fetchCircles } from 'mastodon/actions/circles';
 import { fetchCustomEmojis } from 'mastodon/actions/custom_emojis';
+import { fetchReactionDeck } from 'mastodon/actions/reaction_deck';
 import { hydrateStore } from 'mastodon/actions/store';
 import { connectUserStream } from 'mastodon/actions/streaming';
 import ErrorBoundary from 'mastodon/components/error_boundary';
@@ -18,7 +20,6 @@ import initialState, { title as siteTitle } from 'mastodon/initial_state';
 import { IntlProvider } from 'mastodon/locales';
 import { store } from 'mastodon/store';
 import { isProduction } from 'mastodon/utils/environment';
-import { BodyScrollLock } from 'mastodon/features/ui/components/body_scroll_lock';
 
 const title = isProduction() ? siteTitle : `${siteTitle} (Dev)`;
 
@@ -27,6 +28,8 @@ const hydrateAction = hydrateStore(initialState);
 store.dispatch(hydrateAction);
 if (initialState.meta.me) {
   store.dispatch(fetchCustomEmojis());
+  store.dispatch(fetchReactionDeck());
+  store.dispatch(fetchCircles());
 }
 
 export default class Mastodon extends PureComponent {
@@ -59,7 +62,6 @@ export default class Mastodon extends PureComponent {
                 <ScrollContext shouldUpdateScroll={this.shouldUpdateScroll}>
                   <Route path='/' component={UI} />
                 </ScrollContext>
-                <BodyScrollLock />
               </Router>
 
               <Helmet defaultTitle={title} titleTemplate={`%s - ${title}`} />

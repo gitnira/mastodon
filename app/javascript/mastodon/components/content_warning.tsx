@@ -10,6 +10,6 @@ export const ContentWarning: React.FC<{
     onClick={onClick}
     variant={BannerVariant.Warning}
   >
-    <span dangerouslySetInnerHTML={{ __html: text }} />
+    <p dangerouslySetInnerHTML={{ __html: text }} />
   </StatusBanner>
 );

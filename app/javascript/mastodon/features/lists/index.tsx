@@ -13,9 +13,9 @@ import { fetchLists } from 'mastodon/actions/lists';
 import { openModal } from 'mastodon/actions/modal';
 import { Column } from 'mastodon/components/column';
 import { ColumnHeader } from 'mastodon/components/column_header';
-import { Dropdown } from 'mastodon/components/dropdown_menu';
 import { Icon } from 'mastodon/components/icon';
 import ScrollableList from 'mastodon/components/scrollable_list';
+import DropdownMenuContainer from 'mastodon/containers/dropdown_menu_container';
 import { getOrderedLists } from 'mastodon/selectors/lists';
 import { useAppSelector, useAppDispatch } from 'mastodon/store';
 
@@ -30,7 +30,8 @@ const messages = defineMessages({
 const ListItem: React.FC<{
   id: string;
   title: string;
-}> = ({ id, title }) => {
+  antennaTitles?: string[];
+}> = ({ id, title, antennaTitles }) => {
   const dispatch = useAppDispatch();
   const intl = useIntl();
 
@@ -57,14 +58,26 @@ const ListItem: React.FC<{
     <div className='lists__item'>
       <Link to={`/lists/${id}`} className='lists__item__title'>
         <Icon id='list-ul' icon={ListAltIcon} />
-        <span>{title}</span>
+        <span>
+          {title}
+          {antennaTitles?.map((at) => (
+            <span key={at} className='lists__item__memo'>
+              <FormattedMessage
+                id='lists.memo_related_antenna'
+                defaultMessage='Antenna: "{title}"'
+                values={{ title: at }}
+              />
+            </span>
+          ))}
+        </span>
       </Link>
 
-      <Dropdown
+      <DropdownMenuContainer
         scrollKey='lists'
         items={menu}
-        icon='ellipsis-h'
+        icons='ellipsis-h'
         iconComponent={MoreHorizIcon}
+        direction='right'
         title={intl.formatMessage(messages.more)}
       />
     </div>
@@ -79,7 +92,7 @@ const Lists: React.FC<{
   const lists = useAppSelector((state) => getOrderedLists(state));
 
   useEffect(() => {
-    void dispatch(fetchLists());
+    dispatch(fetchLists());
   }, [dispatch]);
 
   const emptyMessage = (
@@ -128,7 +141,12 @@ const Lists: React.FC<{
         bindToDocument={!multiColumn}
       >
         {lists.map((list) => (
-          <ListItem key={list.id} id={list.id} title={list.title} />
+          <ListItem
+            key={list.id}
+            id={list.id}
+            title={list.title}
+            antennaTitles={list.antennas.map((a) => a.title)}
+          />
         ))}
       </ScrollableList>
 

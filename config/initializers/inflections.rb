@@ -20,7 +20,6 @@ ActiveSupport::Inflector.inflections(:en) do |inflect|
   inflect.acronym 'DeepL'
   inflect.acronym 'DSL'
   inflect.acronym 'JsonLd'
-  inflect.acronym 'OAuth'
   inflect.acronym 'OEmbed'
   inflect.acronym 'OStatus'
   inflect.acronym 'PubSubHubbub'

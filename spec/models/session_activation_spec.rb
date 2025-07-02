@@ -3,7 +3,7 @@
 require 'rails_helper'
 
 RSpec.describe SessionActivation do
-  it_behaves_like 'BrowserDetection'
+  include_examples 'BrowserDetection'
 
   describe '.active?' do
     subject { described_class.active?(id) }

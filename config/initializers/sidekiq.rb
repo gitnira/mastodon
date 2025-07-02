@@ -26,12 +26,6 @@ Sidekiq.configure_server do |config|
     require 'prometheus_exporter'
     require 'prometheus_exporter/instrumentation'
 
-    if ENV['MASTODON_PROMETHEUS_EXPORTER_LOCAL'] == 'true'
-      config.on :startup do
-        Mastodon::PrometheusExporter::LocalServer.setup!
-      end
-    end
-
     config.on :startup do
       # Ruby process metrics (memory, GC, etc)
       PrometheusExporter::Instrumentation::Process.start type: 'sidekiq'
@@ -95,8 +89,6 @@ Sidekiq.configure_server do |config|
     end
   end
 
-  config.logger.level = Logger.const_get(ENV.fetch('RAILS_LOG_LEVEL', 'info').upcase.to_s)
-
   SidekiqUniqueJobs::Server.configure(config)
 end
 
@@ -106,9 +98,9 @@ Sidekiq.configure_client do |config|
   config.client_middleware do |chain|
     chain.add SidekiqUniqueJobs::Middleware::Client
   end
-
-  config.logger.level = Logger.const_get(ENV.fetch('RAILS_LOG_LEVEL', 'info').upcase.to_s)
 end
+
+Sidekiq.logger.level = ::Logger.const_get(ENV.fetch('RAILS_LOG_LEVEL', 'info').upcase.to_s)
 
 SidekiqUniqueJobs.configure do |config|
   config.enabled         = !Rails.env.test?

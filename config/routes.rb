@@ -57,6 +57,8 @@ Rails.application.routes.draw do
   get 'intent', to: 'intents#show'
   get 'custom.css', to: 'custom_css#show'
   resources :custom_css, only: :show, path: :css
+  get 'system.css', to: 'system_css#show', as: :system_css
+  get 'user_custom.css', to: 'user_custom_css#show', as: :user_custom_css
 
   get 'remote_interaction_helper', to: 'remote_interaction_helper#index'
 
@@ -103,6 +105,7 @@ Rails.application.routes.draw do
       end
 
       resources :replies, only: [:index], module: :activitypub
+      resources :references, only: [:index], module: :activitypub
       resources :likes, only: [:index], module: :activitypub
       resources :shares, only: [:index], module: :activitypub
     end
@@ -119,6 +122,7 @@ Rails.application.routes.draw do
   end
 
   resource :inbox, only: [:create], module: :activitypub
+  resources :contexts, only: [:show], module: :activitypub
 
   constraints(encoded_path: /%40.*/) do
     get '/:encoded_path', to: redirect { |params|
@@ -129,7 +133,6 @@ Rails.application.routes.draw do
   constraints(username: %r{[^@/.]+}) do
     with_options to: 'accounts#show' do
       get '/@:username', as: :short_account
-      get '/@:username/featured'
       get '/@:username/with_replies', as: :short_account_with_replies
       get '/@:username/media', as: :short_account_media
       get '/@:username/tagged/:tag', as: :short_account_tag

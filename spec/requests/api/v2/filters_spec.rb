@@ -51,7 +51,17 @@ RSpec.describe 'Filters' do
     it_behaves_like 'unauthorized for invalid token'
 
     context 'with valid params' do
-      let(:params) { { title: 'magic', context: %w(home), filter_action: 'hide', keywords_attributes: [keyword: 'magic'] } }
+      let(:params) do
+        {
+          title: 'magic',
+          context: %w(home),
+          filter_action: 'hide',
+          exclude_follows: true,
+          exclude_localusers: true,
+          with_profile: true,
+          keywords_attributes: [keyword: 'magic', whole_word: true],
+        }
+      end
 
       it 'returns http success with a filter with keywords in json and creates a filter', :aggregate_failures do
         subject
@@ -67,7 +77,10 @@ RSpec.describe 'Filters' do
             context: %w(home),
             keywords: contain_exactly(
               include(keyword: 'magic', whole_word: true)
-            )
+            ),
+            exclude_follows: true,
+            exclude_localusers: true,
+            with_profile: true
           )
 
         filter = user.account.custom_filters.first
@@ -75,13 +88,16 @@ RSpec.describe 'Filters' do
         expect(filter).to be_present
         expect(filter.keywords.pluck(:keyword)).to eq ['magic']
         expect(filter.context).to eq %w(home)
+        expect(filter.exclude_follows).to be true
+        expect(filter.exclude_localusers).to be true
+        expect(filter.with_profile).to be true
         expect(filter.irreversible?).to be true
         expect(filter.expires_at).to be_nil
       end
     end
 
     context 'when the required title param is missing' do
-      let(:params) { { context: %w(home), filter_action: 'hide', keywords_attributes: [keyword: 'magic'] } }
+      let(:params) { { context: %w(home), filter_action: 'hide', keywords_attributes: [keyword: 'magic'], exclude_follows: false, exclude_localusers: false } }
 
       it 'returns http unprocessable entity' do
         subject
@@ -93,7 +109,7 @@ RSpec.describe 'Filters' do
     end
 
     context 'when the required context param is missing' do
-      let(:params) { { title: 'magic', filter_action: 'hide', keywords_attributes: [keyword: 'magic'] } }
+      let(:params) { { title: 'magic', filter_action: 'hide', keywords_attributes: [keyword: 'magic'], exclude_follows: false, exclude_localusers: false } }
 
       it 'returns http unprocessable entity' do
         subject
@@ -101,11 +117,21 @@ RSpec.describe 'Filters' do
         expect(response).to have_http_status(422)
         expect(response.content_type)
           .to start_with('application/json')
+      end
+    end
+
+    context 'when the required kmyblue original params are missing' do
+      let(:params) { { title: 'magic', context: %w(home), filter_action: 'hide', keywords_attributes: [keyword: 'magic'] } }
+
+      it 'returns http success' do
+        subject
+
+        expect(response).to have_http_status(200)
       end
     end
 
     context 'when the given context value is invalid' do
-      let(:params) { { title: 'magic', context: %w(shaolin), filter_action: 'hide', keywords_attributes: [keyword: 'magic'] } }
+      let(:params) { { title: 'magic', context: %w(shaolin), filter_action: 'hide', keywords_attributes: [keyword: 'magic'], exclude_follows: false, exclude_localusers: false } }
 
       it 'returns http unprocessable entity' do
         subject
@@ -113,21 +139,6 @@ RSpec.describe 'Filters' do
         expect(response).to have_http_status(422)
         expect(response.content_type)
           .to start_with('application/json')
-      end
-    end
-
-    context 'when the given filter_action value is invalid' do
-      let(:params) { { title: 'magic', filter_action: 'imaginary_value', keywords_attributes: [keyword: 'magic'] } }
-
-      it 'returns http unprocessable entity' do
-        subject
-
-        expect(response)
-          .to have_http_status(422)
-        expect(response.content_type)
-          .to start_with('application/json')
-        expect(response.parsed_body)
-          .to include(error: /Action is not included/)
       end
     end
   end
@@ -181,7 +192,7 @@ RSpec.describe 'Filters' do
 
     context 'when updating filter parameters' do
       context 'with valid params' do
-        let(:params) { { title: 'updated', context: %w(home public) } }
+        let(:params) { { title: 'updated', context: %w(home public), exclude_follows: true, exclude_localusers: true, exclude_profile: true } }
 
         it 'updates the filter successfully', :aggregate_failures do
           subject
@@ -193,6 +204,9 @@ RSpec.describe 'Filters' do
             .to start_with('application/json')
           expect(filter.title).to eq 'updated'
           expect(filter.reload.context).to eq %w(home public)
+          expect(filter.exclude_follows).to be true
+          expect(filter.exclude_localusers).to be true
+          expect(filter.exclude_profile).to be true
         end
       end
 

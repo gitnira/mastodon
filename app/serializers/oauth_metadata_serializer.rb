@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class OAuthMetadataSerializer < ActiveModel::Serializer
+class OauthMetadataSerializer < ActiveModel::Serializer
   attributes :issuer, :authorization_endpoint, :token_endpoint,
              :revocation_endpoint, :userinfo_endpoint, :scopes_supported,
              :response_types_supported, :response_modes_supported,

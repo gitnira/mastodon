@@ -44,14 +44,14 @@ RSpec.describe Fasp::Request do
   end
 
   describe '#get' do
-    it_behaves_like 'a provider request', :get
+    include_examples 'a provider request', :get
   end
 
   describe '#post' do
-    it_behaves_like 'a provider request', :post
+    include_examples 'a provider request', :post
   end
 
   describe '#delete' do
-    it_behaves_like 'a provider request', :delete
+    include_examples 'a provider request', :delete
   end
 end

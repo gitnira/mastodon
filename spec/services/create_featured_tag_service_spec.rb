@@ -20,9 +20,11 @@ RSpec.describe CreateFeaturedTagService do
     context 'with a remote account' do
       let(:account) { Fabricate(:account, domain: 'host.example') }
 
-      it 'raises argument error' do
+      it 'creates a new featured tag and does not distributes' do
         expect { subject.call(account, tag) }
-          .to raise_error ArgumentError
+          .to change(FeaturedTag, :count).by(1)
+        expect(ActivityPub::AccountRawDistributionWorker)
+          .to_not have_enqueued_sidekiq_job(any_args)
       end
     end
   end

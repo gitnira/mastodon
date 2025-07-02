@@ -6,6 +6,7 @@ module Account::Suspensions
   included do
     scope :suspended, -> { where.not(suspended_at: nil) }
     scope :without_suspended, -> { where(suspended_at: nil) }
+    scope :remote_pending, -> { where(remote_pending: true).where.not(suspended_at: nil) }
   end
 
   def suspended?
@@ -40,5 +41,22 @@ module Account::Suspensions
       update!(suspended_at: nil, suspension_origin: nil)
       destroy_canonical_email_block!
     end
+  end
+
+  def approve_remote!
+    return unless remote_pending
+
+    update!(remote_pending: false)
+    unsuspend!
+    ActivateRemoteAccountWorker.perform_async(id)
+  end
+
+  def reject_remote!
+    return unless remote_pending
+
+    update!(remote_pending: false, suspension_origin: :local)
+    pending_follow_requests.destroy_all
+    pending_statuses.destroy_all
+    suspend!
   end
 end

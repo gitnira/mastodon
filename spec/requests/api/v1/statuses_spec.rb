@@ -122,9 +122,48 @@ RSpec.describe '/api/v1/statuses' do
     describe 'GET /api/v1/statuses/:id/context' do
       let(:scopes) { 'read:statuses' }
       let(:status) { Fabricate(:status, account: user.account) }
+      let!(:thread) { Fabricate(:status, account: user.account, thread: status) }
+
+      it 'returns http success' do
+        get "/api/v1/statuses/#{status.id}/context", params: { id: status.id }
+        expect(response).to have_http_status(200)
+      end
+
+      context 'when has also reference' do
+        before do
+          Fabricate(:status_reference, status: thread, target_status: status)
+        end
+
+        it 'returns unique ancestors' do
+          get "/api/v1/statuses/#{thread.id}/context"
+          status_ids = response.parsed_body[:ancestors].map { |ref| ref[:id].to_i }
+
+          expect(status_ids).to eq [status.id]
+        end
+
+        it 'returns unique references' do
+          get "/api/v1/statuses/#{thread.id}/context", params: { with_reference: true }
+          ancestor_status_ids = response.parsed_body[:ancestors].map { |ref| ref[:id].to_i }
+          reference_status_ids = response.parsed_body[:references].map { |ref| ref[:id].to_i }
+
+          expect(ancestor_status_ids).to eq [status.id]
+          expect(reference_status_ids).to eq []
+        end
+      end
+    end
+
+    context 'with reference' do
+      let(:status) { Fabricate(:status, account: user.account) }
+      let(:scopes) { 'read:statuses' }
+      let(:referred) { Fabricate(:status) }
+      let(:referred_private) { Fabricate(:status, visibility: :private) }
+      let(:referred_private_following) { Fabricate(:status, visibility: :private) }
 
       before do
-        Fabricate(:status, account: user.account, thread: status)
+        user.account.follow!(referred_private_following.account)
+        Fabricate(:status_reference, status: status, target_status: referred)
+        Fabricate(:status_reference, status: status, target_status: referred_private)
+        Fabricate(:status_reference, status: status, target_status: referred_private_following)
       end
 
       it 'returns http success' do
@@ -133,6 +172,56 @@ RSpec.describe '/api/v1/statuses' do
         expect(response).to have_http_status(200)
         expect(response.content_type)
           .to start_with('application/json')
+      end
+
+      it 'returns empty references' do
+        get "/api/v1/statuses/#{status.id}/context", headers: headers
+        status_ids = response.parsed_body[:references].map { |ref| ref[:id].to_i }
+
+        expect(status_ids).to eq []
+      end
+
+      it 'contains referred status' do
+        get "/api/v1/statuses/#{status.id}/context", headers: headers
+        status_ids = response.parsed_body[:ancestors].map { |ref| ref[:id].to_i }
+
+        expect(status_ids).to include referred.id
+        expect(status_ids).to include referred_private_following.id
+      end
+
+      it 'does not contain private status' do
+        get "/api/v1/statuses/#{status.id}/context", headers: headers
+        status_ids = response.parsed_body[:ancestors].map { |ref| ref[:id].to_i }
+
+        expect(status_ids).to_not include referred_private.id
+      end
+
+      it 'does not contain private status when not autienticated' do
+        get "/api/v1/statuses/#{status.id}/context"
+        status_ids = response.parsed_body[:ancestors].map { |ref| ref[:id].to_i }
+
+        expect(status_ids).to_not include referred_private.id
+      end
+
+      context 'when with_reference is enabled' do
+        it 'returns http success' do
+          get "/api/v1/statuses/#{status.id}/context", params: { with_reference: true }, headers: headers
+          expect(response).to have_http_status(200)
+        end
+
+        it 'returns empty ancestors' do
+          get "/api/v1/statuses/#{status.id}/context", params: { with_reference: true }, headers: headers
+          status_ids = response.parsed_body[:ancestors].map { |ref| ref[:id].to_i }
+
+          expect(status_ids).to eq []
+        end
+
+        it 'contains referred status' do
+          get "/api/v1/statuses/#{status.id}/context", params: { with_reference: true }, headers: headers
+          status_ids = response.parsed_body[:references].map { |ref| ref[:id].to_i }
+
+          expect(status_ids).to include referred.id
+        end
       end
     end
 

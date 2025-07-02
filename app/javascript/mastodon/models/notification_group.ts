@@ -7,6 +7,8 @@ import type {
   ApiNotificationJSON,
   NotificationType,
   NotificationWithStatusType,
+  NotificationEmojiReactionGroupJSON,
+  NotifyEmojiReactionJSON,
 } from 'mastodon/api_types/notifications';
 import type { ApiReportJSON } from 'mastodon/api_types/reports';
 
@@ -24,6 +26,23 @@ interface BaseNotificationWithStatus<Type extends NotificationWithStatusType>
   extends BaseNotificationGroup {
   type: Type;
   statusId: string | undefined;
+  emojiReactionGroups?: EmojiReactionGroup[];
+}
+
+interface EmojiInfo {
+  name: string;
+  count: number;
+  me: boolean;
+  url?: string;
+  static_url?: string;
+  domain?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface EmojiReactionGroup {
+  emoji: EmojiInfo;
+  sampleAccountIds: string[];
 }
 
 interface BaseNotification<Type extends NotificationType>
@@ -33,9 +52,15 @@ interface BaseNotification<Type extends NotificationType>
 
 export type NotificationGroupFavourite =
   BaseNotificationWithStatus<'favourite'>;
+export type NotificationGroupEmojiReaction =
+  BaseNotificationWithStatus<'emoji_reaction'>;
 export type NotificationGroupReblog = BaseNotificationWithStatus<'reblog'>;
 export type NotificationGroupStatus = BaseNotificationWithStatus<'status'>;
+export type NotificationGroupListStatus =
+  BaseNotificationWithStatus<'list_status'>;
 export type NotificationGroupMention = BaseNotificationWithStatus<'mention'>;
+export type NotificationGroupStatusReference =
+  BaseNotificationWithStatus<'status_reference'>;
 export type NotificationGroupPoll = BaseNotificationWithStatus<'poll'>;
 export type NotificationGroupUpdate = BaseNotificationWithStatus<'update'>;
 export type NotificationGroupFollow = BaseNotification<'follow'>;
@@ -45,6 +70,7 @@ export type NotificationGroupAdminSignUp = BaseNotification<'admin.sign_up'>;
 export type AccountWarningAction =
   | 'none'
   | 'disable'
+  | 'force_cw'
   | 'mark_statuses_as_sensitive'
   | 'delete_statuses'
   | 'sensitive'
@@ -84,9 +110,12 @@ export interface NotificationGroupAdminReport
 
 export type NotificationGroup =
   | NotificationGroupFavourite
+  | NotificationGroupEmojiReaction
   | NotificationGroupReblog
   | NotificationGroupStatus
+  | NotificationGroupListStatus
   | NotificationGroupMention
+  | NotificationGroupStatusReference
   | NotificationGroupPoll
   | NotificationGroupUpdate
   | NotificationGroupFollow
@@ -121,6 +150,20 @@ function createAccountRelationshipSeveranceEventFromJSON(
   return eventJson;
 }
 
+function createEmojiReactionGroupsFromJSON(
+  json: NotifyEmojiReactionJSON | undefined,
+  sampleAccountIds: string[],
+): EmojiReactionGroup[] {
+  if (typeof json === 'undefined') return [];
+
+  return [
+    {
+      emoji: json,
+      sampleAccountIds,
+    },
+  ];
+}
+
 function createAnnualReportEventFromJSON(
   eventJson: ApiAnnualReportEventJSON,
 ): AnnualReportEvent {
@@ -136,13 +179,39 @@ export function createNotificationGroupFromJSON(
     case 'favourite':
     case 'reblog':
     case 'status':
+    case 'list_status':
     case 'mention':
+    case 'status_reference':
     case 'poll':
     case 'update': {
       const { status_id: statusId, ...groupWithoutStatus } = group;
       return {
         statusId: statusId ?? undefined,
         sampleAccountIds,
+        partial: false,
+        ...groupWithoutStatus,
+      };
+    }
+    case 'emoji_reaction': {
+      const {
+        status_id: statusId,
+        emoji_reaction_groups: emojiReactionGroups,
+        ...groupWithoutStatus
+      } = group;
+      const groups = (
+        typeof emojiReactionGroups === 'undefined'
+          ? ([] as NotificationEmojiReactionGroupJSON[])
+          : emojiReactionGroups
+      ).map((g) => {
+        return {
+          sampleAccountIds: g.sample_account_ids,
+          emoji: g.emoji_reaction,
+        } as EmojiReactionGroup;
+      });
+      return {
+        statusId: statusId ?? undefined,
+        sampleAccountIds,
+        emojiReactionGroups: groups,
         partial: false,
         ...groupWithoutStatus,
       };
@@ -209,12 +278,30 @@ export function createNotificationGroupFromNotificationJSON(
     case 'reblog':
     case 'status':
     case 'mention':
+    case 'status_reference':
     case 'poll':
     case 'update':
       return {
         ...group,
         type: notification.type,
         statusId: notification.status?.id,
+      };
+    case 'list_status':
+      return {
+        ...group,
+        type: notification.type,
+        statusId: notification.status?.id,
+        list: notification.list,
+      };
+    case 'emoji_reaction':
+      return {
+        ...group,
+        type: notification.type,
+        statusId: notification.status?.id,
+        emojiReactionGroups: createEmojiReactionGroupsFromJSON(
+          notification.emoji_reaction,
+          group.sampleAccountIds,
+        ),
       };
     case 'admin.report':
       return {

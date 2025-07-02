@@ -68,7 +68,7 @@ class Announcement < ApplicationRecord
       if status_ids.nil?
         []
       else
-        Status.with_includes.distributable_visibility.where(id: status_ids)
+        Status.with_includes.distributable_visibility_for_anonymous.where(id: status_ids)
       end
     end
   end

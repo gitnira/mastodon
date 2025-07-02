@@ -19,13 +19,13 @@ module Status::SnapshotConcern
       status_id: id,
       text: text,
       spoiler_text: spoiler_text,
+      markdown: markdown,
       sensitive: sensitive,
       ordered_media_attachment_ids: ordered_media_attachment_ids&.dup || media_attachments.pluck(:id),
       media_descriptions: ordered_media_attachments.map(&:description),
       poll_options: preloadable_poll&.options&.dup,
       account_id: account_id || self.account_id,
       created_at: at_time || edited_at,
-      quote_id: quote&.id,
       rate_limit: rate_limit
     )
   end

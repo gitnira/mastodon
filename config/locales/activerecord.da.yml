@@ -48,7 +48,7 @@ da:
         status:
           attributes:
             reblog:
-              taken: af indlæg findes allerede
+              taken: af status findes allerede
         terms_of_service:
           attributes:
             effective_date:

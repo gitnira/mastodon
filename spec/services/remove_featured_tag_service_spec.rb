@@ -23,9 +23,13 @@ RSpec.describe RemoveFeaturedTagService do
       context 'when called by a non local account' do
         let(:account) { Fabricate(:account, domain: 'host.example') }
 
-        it 'raises argument error' do
-          expect { subject.call(account, featured_tag) }
-            .to raise_error(ArgumentError)
+        it 'destroys the featured tag and does not send a distribution' do
+          subject.call(account, featured_tag)
+
+          expect { featured_tag.reload }
+            .to raise_error(ActiveRecord::RecordNotFound)
+          expect(ActivityPub::AccountRawDistributionWorker)
+            .to_not have_enqueued_sidekiq_job(any_args)
         end
       end
     end

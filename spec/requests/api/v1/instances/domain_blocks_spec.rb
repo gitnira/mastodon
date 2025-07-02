@@ -3,9 +3,14 @@
 require 'rails_helper'
 
 RSpec.describe 'Domain Blocks' do
+  let(:user)    { Fabricate(:user) }
+  let(:token)   { Fabricate(:accessible_access_token, resource_owner_id: user.id, scopes: scopes) }
+  let(:scopes)  { 'read' }
+  let(:headers) { { Authorization: "Bearer #{token.token}" } }
+
   describe 'GET /api/v1/instance/domain_blocks' do
     let(:user) { Fabricate(:user) }
-    let(:token) { Fabricate(:accessible_access_token, resource_owner_id: user.id).token }
+    let(:token) { Fabricate(:accessible_access_token, resource_owner_id: user.id) }
 
     before { Fabricate(:domain_block) }
 
@@ -26,6 +31,16 @@ RSpec.describe 'Domain Blocks' do
           .and(be_an(Array))
           .and(have_attributes(size: 1))
       end
+
+      context 'with hidden domain block' do
+        before { Fabricate(:domain_block, domain: 'hello.com', hidden: true) }
+
+        it 'returns http success and dont include hidden record' do
+          get api_v1_instance_domain_blocks_path
+
+          expect(response.parsed_body.pluck(:domain)).to_not include('hello.com')
+        end
+      end
     end
 
     context 'with domain blocks set to users' do
@@ -45,7 +60,7 @@ RSpec.describe 'Domain Blocks' do
           before { user.update(approved: false) }
 
           it 'returns http not found' do
-            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token}" }
+            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token.token}" }
 
             expect(response)
               .to have_http_status(404)
@@ -56,7 +71,7 @@ RSpec.describe 'Domain Blocks' do
           before { user.update(confirmed_at: nil) }
 
           it 'returns http not found' do
-            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token}" }
+            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token.token}" }
 
             expect(response)
               .to have_http_status(404)
@@ -67,7 +82,7 @@ RSpec.describe 'Domain Blocks' do
           before { user.update(disabled: true) }
 
           it 'returns http not found' do
-            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token}" }
+            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token.token}" }
 
             expect(response)
               .to have_http_status(404)
@@ -78,7 +93,7 @@ RSpec.describe 'Domain Blocks' do
           before { user.account.update(suspended_at: Time.zone.now) }
 
           it 'returns http not found' do
-            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token}" }
+            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token.token}" }
 
             expect(response)
               .to have_http_status(403)
@@ -89,7 +104,7 @@ RSpec.describe 'Domain Blocks' do
           before { user.account.update(moved_to_account_id: Fabricate(:account).id) }
 
           it 'returns http success' do
-            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token}" }
+            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token.token}" }
 
             expect(response)
               .to have_http_status(200)
@@ -106,7 +121,7 @@ RSpec.describe 'Domain Blocks' do
 
         context 'with normal user' do
           it 'returns http success' do
-            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token}" }
+            get api_v1_instance_domain_blocks_path, headers: { 'Authorization' => "Bearer #{token.token}" }
 
             expect(response)
               .to have_http_status(200)
@@ -119,6 +134,32 @@ RSpec.describe 'Domain Blocks' do
               .and(be_an(Array))
               .and(have_attributes(size: 1))
           end
+        end
+      end
+    end
+
+    context 'with domain blocks set to users with access token' do
+      before { Setting.show_domain_blocks = 'users' }
+
+      it 'returns http not found' do
+        get api_v1_instance_domain_blocks_path, headers: headers
+
+        expect(response)
+          .to have_http_status(200)
+
+        expect(response.parsed_body)
+          .to be_present
+          .and(be_an(Array))
+          .and(have_attributes(size: 1))
+      end
+
+      context 'with hidden domain block' do
+        before { Fabricate(:domain_block, domain: 'hello.com', hidden: true) }
+
+        it 'returns http success and dont include hidden record' do
+          get api_v1_instance_domain_blocks_path, headers: headers
+
+          expect(response.parsed_body.pluck(:domain)).to_not include('hello.com')
         end
       end
     end

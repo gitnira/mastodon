@@ -6,6 +6,7 @@ import { FormattedMessage } from 'react-intl';
 import ImmutablePropTypes from 'react-immutable-proptypes';
 
 import { identityContextPropShape, withIdentity } from 'mastodon/identity_context';
+import { enableEmojiReaction } from 'mastodon/initial_state';
 import { PERMISSION_MANAGE_USERS, PERMISSION_MANAGE_REPORTS } from 'mastodon/permissions';
 
 import ClearColumnButton from './clear_column_button';
@@ -27,7 +28,12 @@ class ColumnSettings extends PureComponent {
   };
 
   onPushChange = (path, checked) => {
-    this.props.onChange(['push', ...path], checked);
+    const { pushSettings } = this.props;
+    const showPushSettings = pushSettings.get('browserSupport') && pushSettings.get('isSubscribed');
+
+    if (showPushSettings) {
+      this.props.onChange(['push', ...path], checked);
+    }
   };
 
   render () {
@@ -121,6 +127,19 @@ class ColumnSettings extends PureComponent {
           </div>
         </section>
 
+        {enableEmojiReaction && (
+          <section role='group' aria-labelledby='notifications-emoji_reaction'>
+            <h3 id='notifications-emoji_reaction'><FormattedMessage id='notifications.column_settings.emoji_reaction' defaultMessage='Stamps:' /></h3>
+
+            <div className='column-settings__row'>
+              <SettingToggle disabled={browserPermission === 'denied'} prefix='notifications_desktop' settings={settings} settingPath={['alerts', 'emoji_reaction']} onChange={onChange} label={alertStr} />
+              {showPushSettings && <SettingToggle prefix='notifications_push' settings={pushSettings} settingPath={['alerts', 'emoji_reaction']} onChange={this.onPushChange} label={pushStr} />}
+              <SettingToggle prefix='notifications' settings={settings} settingPath={['shows', 'emoji_reaction']} onChange={onChange} label={showStr} />
+              <SettingToggle prefix='notifications' settings={settings} settingPath={['sounds', 'emoji_reaction']} onChange={onChange} label={soundStr} />
+            </div>
+          </section>
+        )}
+
         <section role='group' aria-labelledby='notifications-mention'>
           <h3 id='notifications-mention'><FormattedMessage id='notifications.column_settings.mention' defaultMessage='Mentions:' /></h3>
 
@@ -143,6 +162,19 @@ class ColumnSettings extends PureComponent {
           </div>
         </section>
 
+        <section>
+          <div role='group' aria-labelledby='notifications-status_reference'>
+            <h3 id='notifications-status_reference'><FormattedMessage id='notifications.column_settings.status_reference' defaultMessage='Quotes:' /></h3>
+
+            <div className='column-settings__row'>
+              <SettingToggle disabled={browserPermission === 'denied'} prefix='notifications_desktop' settings={settings} settingPath={['alerts', 'status_reference']} onChange={onChange} label={alertStr} />
+              {showPushSettings && <SettingToggle prefix='notifications_push' settings={pushSettings} settingPath={['alerts', 'status_reference']} onChange={this.onPushChange} label={pushStr} />}
+              <SettingToggle prefix='notifications' settings={settings} settingPath={['shows', 'status_reference']} onChange={onChange} label={showStr} />
+              <SettingToggle prefix='notifications' settings={settings} settingPath={['sounds', 'status_reference']} onChange={onChange} label={soundStr} />
+            </div>
+          </div>
+        </section>
+
         <section role='group' aria-labelledby='notifications-poll'>
           <h3 id='notifications-poll'><FormattedMessage id='notifications.column_settings.poll' defaultMessage='Poll results:' /></h3>
 
@@ -162,6 +194,17 @@ class ColumnSettings extends PureComponent {
             {showPushSettings && <SettingToggle prefix='notifications_push' settings={pushSettings} settingPath={['alerts', 'status']} onChange={this.onPushChange} label={pushStr} />}
             <SettingToggle prefix='notifications' settings={settings} settingPath={['shows', 'status']} onChange={onChange} label={showStr} />
             <SettingToggle prefix='notifications' settings={settings} settingPath={['sounds', 'status']} onChange={onChange} label={soundStr} />
+          </div>
+        </section>
+
+        <section role='group' aria-labelledby='notifications-list_status'>
+          <h3 id='notifications-list_status'><FormattedMessage id='notifications.column_settings.list_status' defaultMessage='New posts of list:' /></h3>
+
+          <div className='column-settings__row'>
+            <SettingToggle disabled={browserPermission === 'denied'} prefix='notifications_desktop' settings={settings} settingPath={['alerts', 'list_status']} onChange={onChange} label={alertStr} />
+            {showPushSettings && <SettingToggle prefix='notifications_push' settings={pushSettings} settingPath={['alerts', 'list_status']} onChange={this.onPushChange} label={pushStr} />}
+            <SettingToggle prefix='notifications' settings={settings} settingPath={['shows', 'list_status']} onChange={onChange} label={showStr} />
+            <SettingToggle prefix='notifications' settings={settings} settingPath={['sounds', 'list_status']} onChange={onChange} label={soundStr} />
           </div>
         </section>
 

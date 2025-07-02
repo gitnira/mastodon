@@ -115,7 +115,6 @@ class StatusContent extends PureComponent {
       } else if (link.textContent[0] === '#' || (link.previousSibling && link.previousSibling.textContent && link.previousSibling.textContent[link.previousSibling.textContent.length - 1] === '#')) {
         link.addEventListener('click', this.onHashtagClick.bind(this, link.text), false);
         link.setAttribute('href', `/tags/${link.text.replace(/^#/, '')}`);
-        link.setAttribute('data-menu-hashtag', this.props.status.getIn(['account', 'id']));
       } else {
         link.setAttribute('title', link.href);
         link.classList.add('unhandled-link');
@@ -226,7 +225,12 @@ class StatusContent extends PureComponent {
     const renderReadMore = this.props.onClick && status.get('collapsed');
     const contentLocale = intl.locale.replace(/[_-].*/, '');
     const targetLanguages = this.props.languages?.get(status.get('language') || 'und');
-    const renderTranslate = this.props.onTranslate && this.props.identity.signedIn && ['public', 'unlisted'].includes(status.get('visibility')) && status.get('search_index').trim().length > 0 && targetLanguages?.includes(contentLocale);
+    const renderTranslate = this.props.onTranslate &&
+        this.props.identity.signedIn &&
+        (['public', 'unlisted'].includes(status.get('visibility')) || status.getIn(['account', 'other_settings', 'translatable_private'])) &&
+        status.get('search_index').trim().length > 0 &&
+        status.get('language') &&
+        targetLanguages?.includes(contentLocale);
 
     const content = { __html: statusContent ?? getStatusContent(status) };
     const language = status.getIn(['translation', 'language']) || status.get('language');
@@ -252,7 +256,7 @@ class StatusContent extends PureComponent {
     if (this.props.onClick) {
       return (
         <>
-          <div className={classNames} ref={this.setRef} onMouseDown={this.handleMouseDown} onMouseUp={this.handleMouseUp} key='status-content' onMouseEnter={this.handleMouseEnter} onMouseLeave={this.handleMouseLeave}>
+          <div className={classNames} ref={this.setRef} tabIndex={0} onMouseDown={this.handleMouseDown} onMouseUp={this.handleMouseUp} key='status-content' onMouseEnter={this.handleMouseEnter} onMouseLeave={this.handleMouseLeave}>
             <div className='status__content__text status__content__text--visible translate' lang={language} dangerouslySetInnerHTML={content} />
 
             {poll}
@@ -264,7 +268,7 @@ class StatusContent extends PureComponent {
       );
     } else {
       return (
-        <div className={classNames} ref={this.setRef} onMouseEnter={this.handleMouseEnter} onMouseLeave={this.handleMouseLeave}>
+        <div className={classNames} ref={this.setRef} tabIndex={0} onMouseEnter={this.handleMouseEnter} onMouseLeave={this.handleMouseLeave}>
           <div className='status__content__text status__content__text--visible translate' lang={language} dangerouslySetInnerHTML={content} />
 
           {poll}

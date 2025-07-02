@@ -5,6 +5,8 @@ import { defineMessages, FormattedMessage, useIntl } from 'react-intl';
 
 import HomeIcon from '@/material-icons/400-24px/home-fill.svg?react';
 import InsertChartIcon from '@/material-icons/400-24px/insert_chart.svg?react';
+import ReferenceIcon from '@/material-icons/400-24px/link.svg?react';
+import EmojiReactionIcon from '@/material-icons/400-24px/mood.svg?react';
 import PersonAddIcon from '@/material-icons/400-24px/person_add.svg?react';
 import RepeatIcon from '@/material-icons/400-24px/repeat.svg?react';
 import ReplyAllIcon from '@/material-icons/400-24px/reply_all.svg?react';
@@ -23,7 +25,15 @@ const tooltips = defineMessages({
     id: 'notifications.filter.favourites',
     defaultMessage: 'Favorites',
   },
+  emojiReactions: {
+    id: 'notifications.filter.emoji_reactions',
+    defaultMessage: 'Stamps',
+  },
   boosts: { id: 'notifications.filter.boosts', defaultMessage: 'Boosts' },
+  status_references: {
+    id: 'notifications.filter.status_references',
+    defaultMessage: 'Status references',
+  },
   polls: { id: 'notifications.filter.polls', defaultMessage: 'Poll results' },
   follows: { id: 'notifications.filter.follows', defaultMessage: 'Follows' },
   statuses: {
@@ -93,11 +103,27 @@ export const FilterBar: React.FC = () => {
         </BarButton>
         <BarButton
           selectedFilter={selectedFilter}
+          type='emoji_reaction'
+          key='emoji_reaction'
+          title={intl.formatMessage(tooltips.emojiReactions)}
+        >
+          <Icon id='smile-o' icon={EmojiReactionIcon} />
+        </BarButton>
+        <BarButton
+          selectedFilter={selectedFilter}
           type='reblog'
           key='reblog'
           title={intl.formatMessage(tooltips.boosts)}
         >
           <Icon id='retweet' icon={RepeatIcon} />
+        </BarButton>
+        <BarButton
+          selectedFilter={selectedFilter}
+          type='status_reference'
+          key='status_reference'
+          title={intl.formatMessage(tooltips.status_references)}
+        >
+          <Icon id='retweet' icon={ReferenceIcon} />
         </BarButton>
         <BarButton
           selectedFilter={selectedFilter}

@@ -46,7 +46,11 @@ class AccountsController < ApplicationController
   end
 
   def default_statuses
-    @account.statuses.distributable_visibility
+    if current_account.present?
+      @account.statuses.distributable_visibility
+    else
+      @account.statuses.distributable_visibility_for_anonymous
+    end
   end
 
   def only_media_scope

@@ -28,6 +28,15 @@ module Status::ThreadingConcern
     find_statuses_from_tree_path(descendant_ids(limit, depth), account, promote: true)
   end
 
+  def readable_references(account = nil)
+    statuses = references.to_a
+    account_ids = statuses.map(&:account_id).uniq
+    domains = statuses.filter_map(&:account_domain).uniq
+    relations = account&.relations_map(account_ids, domains) || {}
+    statuses.reject! { |status| StatusFilter.new(status, account, relations).filtered? }
+    statuses
+  end
+
   def self_replies(limit)
     account.statuses.distributable_visibility.where(in_reply_to_id: id).reorder(id: :asc).limit(limit)
   end

@@ -37,7 +37,7 @@ class ActivityPub::Activity
         ActivityPub::Activity::Delete
       when 'Follow'
         ActivityPub::Activity::Follow
-      when 'Like'
+      when 'Like', 'EmojiReaction', 'EmojiReact'
         ActivityPub::Activity::Like
       when 'Block'
         ActivityPub::Activity::Block
@@ -57,8 +57,6 @@ class ActivityPub::Activity
         ActivityPub::Activity::Remove
       when 'Move'
         ActivityPub::Activity::Move
-      when 'QuoteRequest'
-        ActivityPub::Activity::QuoteRequest
       end
     end
   end
@@ -166,7 +164,8 @@ class ActivityPub::Activity
   end
 
   def requested_through_relay?
-    @options[:relayed_through_actor] && Relay.find_by(inbox_url: @options[:relayed_through_actor].inbox_url)&.enabled?
+    @options[:relayed_through_actor] &&
+      (Relay.find_by(inbox_url: @options[:relayed_through_actor].inbox_url)&.enabled? || FriendDomain.free_receivings.exists?(inbox_url: @options[:relayed_through_actor].inbox_url))
   end
 
   def reject_payload!

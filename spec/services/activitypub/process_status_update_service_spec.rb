@@ -5,25 +5,31 @@ require 'rails_helper'
 RSpec.describe ActivityPub::ProcessStatusUpdateService do
   subject { described_class.new }
 
-  let!(:status) { Fabricate(:status, text: 'Hello world', uri: 'https://example.com/statuses/1234', account: Fabricate(:account, domain: 'example.com')) }
+  let(:thread) { nil }
+  let!(:status) { Fabricate(:status, text: 'Hello world', account: Fabricate(:account, domain: 'example.com'), thread: thread) }
   let(:bogus_mention) { 'https://example.com/users/erroringuser' }
+  let(:json_tags) do
+    [
+      { type: 'Hashtag', name: 'hoge' },
+      { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+      { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+      { type: 'Mention', href: bogus_mention },
+    ]
+  end
+  let(:content) { 'Hello universe' }
   let(:payload) do
     {
       '@context': 'https://www.w3.org/ns/activitystreams',
       id: 'foo',
       type: 'Note',
       summary: 'Show more',
-      content: 'Hello universe',
+      content: content,
       updated: '2021-09-08T22:39:25Z',
-      tag: [
-        { type: 'Hashtag', name: 'hoge' },
-        { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
-        { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
-        { type: 'Mention', href: bogus_mention },
-      ],
+      tag: json_tags,
     }
   end
-  let(:json) { Oj.load(Oj.dump(payload)) }
+  let(:payload_override) { {} }
+  let(:json) { Oj.load(Oj.dump(payload.merge(payload_override))) }
 
   let(:alice) { Fabricate(:account) }
   let(:bob) { Fabricate(:account) }
@@ -276,6 +282,44 @@ RSpec.describe ActivityPub::ProcessStatusUpdateService do
       end
     end
 
+    context 'when reject tags by domain-block' do
+      let(:tags) { [Fabricate(:tag, name: 'hoge'), Fabricate(:tag, name: 'ohagi')] }
+
+      before do
+        Fabricate(:domain_block, domain: 'example.com', severity: :noop, reject_hashtag: true)
+        subject.call(status, json, json)
+      end
+
+      it 'updates tags' do
+        expect(status.tags.reload.map(&:name)).to eq []
+      end
+    end
+
+    context 'when reject mentions to stranger by domain-block' do
+      let(:json_tags) do
+        [
+          { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+        ]
+      end
+
+      before do
+        Fabricate(:domain_block, domain: 'example.com', reject_reply_exclude_followers: true, severity: :noop)
+      end
+
+      it 'updates mentions' do
+        subject.call(status, json, json)
+
+        expect(status.mentions.reload.map(&:account_id)).to eq []
+      end
+
+      it 'updates mentions when follower' do
+        alice.follow!(status.account)
+        subject.call(status, json, json)
+
+        expect(status.mentions.reload.map(&:account_id)).to eq [alice.id]
+      end
+    end
+
     context 'when originally without mentions' do
       before do
         subject.call(status, json, json)
@@ -433,393 +477,280 @@ RSpec.describe ActivityPub::ProcessStatusUpdateService do
       expect(status.reload.edited_at.to_s)
         .to eq '2021-09-08 22:39:25 UTC'
     end
-  end
 
-  context 'when the status has an existing unverified quote and adds an approval link' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let!(:quote) { Fabricate(:quote, status: status, quoted_status: quoted_status, approval_uri: nil) }
-    let(:approval_uri) { 'https://quoted.example.com/approvals/1' }
+    describe 'ng word is set' do
+      let(:json_tags) { [] }
 
-    let(:payload) do
-      {
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            '@id': 'https://w3id.org/fep/044f#quote',
-            '@type': '@id',
-          },
-          {
-            '@id': 'https://w3id.org/fep/044f#quoteAuthorization',
-            '@type': '@id',
-          },
-        ],
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-        quote: ActivityPub::TagManager.instance.uri_for(quoted_status),
-        quoteAuthorization: approval_uri,
-      }
-    end
+      context 'when hit ng words' do
+        let(:content) { 'ng word test' }
 
-    before do
-      stub_request(:get, approval_uri).to_return(headers: { 'Content-Type': 'application/activity+json' }, body: Oj.dump({
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
+        it 'update status' do
+          Fabricate(:ng_word, keyword: 'test', stranger: false)
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to_not eq content
+        end
+      end
+
+      context 'when not hit ng words' do
+        let(:content) { 'ng word aiueo' }
+
+        it 'update status' do
+          Fabricate(:ng_word, keyword: 'test', stranger: false)
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to eq content
+        end
+      end
+
+      context 'when hit ng words for mention to local stranger' do
+        let(:json_tags) do
+          [
+            { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+          ]
+        end
+        let(:content) { 'ng word test' }
+
+        it 'update status' do
+          Form::AdminSettings.new(stranger_mention_from_local_ng: '1').save
+          Fabricate(:ng_word, keyword: 'test')
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to_not eq content
+          expect(status.mentioned_accounts.pluck(:id)).to_not include alice.id
+        end
+
+        it 'update status when following' do
+          Form::AdminSettings.new(stranger_mention_from_local_ng: '1').save
+          Fabricate(:ng_word, keyword: 'test')
+          alice.follow!(status.account)
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to eq content
+          expect(status.mentioned_accounts.pluck(:id)).to include alice.id
+        end
+      end
+
+      context 'when hit ng words for mention but local posts are not checked' do
+        let(:json_tags) do
+          [
+            { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+          ]
+        end
+        let(:content) { 'ng word test' }
+
+        it 'update status' do
+          Form::AdminSettings.new(stranger_mention_from_local_ng: '0').save
+          Fabricate(:ng_word, keyword: 'test')
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to_not eq content
+          expect(status.mentioned_accounts.pluck(:id)).to_not include alice.id
+        end
+      end
+
+      context 'when hit ng words for mention to follower' do
+        let(:json_tags) do
+          [
+            { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+          ]
+        end
+        let(:content) { 'ng word test' }
+
+        before do
+          alice.follow!(status.account)
+        end
+
+        it 'update status' do
+          Fabricate(:ng_word, keyword: 'test')
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to eq content
+          expect(status.mentioned_accounts.pluck(:id)).to include alice.id
+        end
+      end
+
+      context 'when hit ng words for reply' do
+        let(:json_tags) do
+          [
+            { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+          ]
+        end
+        let(:content) { 'ng word test' }
+        let(:thread) { Fabricate(:status, account: alice) }
+
+        it 'update status' do
+          Fabricate(:ng_word, keyword: 'test')
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to_not eq content
+          expect(status.mentioned_accounts.pluck(:id)).to_not include alice.id
+        end
+      end
+
+      context 'when hit ng words for reply to follower' do
+        let(:json_tags) do
+          [
+            { type: 'Mention', href: ActivityPub::TagManager.instance.uri_for(alice) },
+          ]
+        end
+        let(:content) { 'ng word test' }
+        let(:thread) { Fabricate(:status, account: alice) }
+
+        before do
+          alice.follow!(status.account)
+        end
+
+        it 'update status' do
+          Fabricate(:ng_word, keyword: 'test')
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to eq content
+          expect(status.mentioned_accounts.pluck(:id)).to include alice.id
+        end
+      end
+
+      context 'when hit ng words for reference' do
+        let!(:target_status) { Fabricate(:status, account: alice) }
+        let(:payload_override) do
           {
-            QuoteAuthorization: 'https://w3id.org/fep/044f#QuoteAuthorization',
-            gts: 'https://gotosocial.org/ns#',
-            interactionPolicy: {
-              '@id': 'gts:interactionPolicy',
-              '@type': '@id',
+            references: {
+              id: 'target_status',
+              type: 'Collection',
+              first: {
+                type: 'CollectionPage',
+                next: nil,
+                partOf: 'target_status',
+                items: [
+                  ActivityPub::TagManager.instance.uri_for(target_status),
+                ],
+              },
             },
-            interactingObject: {
-              '@id': 'gts:interactingObject',
-              '@type': '@id',
-            },
-            interactionTarget: {
-              '@id': 'gts:interactionTarget',
-              '@type': '@id',
-            },
-          },
-        ],
-        type: 'QuoteAuthorization',
-        id: approval_uri,
-        attributedTo: ActivityPub::TagManager.instance.uri_for(quoted_status.account),
-        interactingObject: ActivityPub::TagManager.instance.uri_for(status),
-        interactionTarget: ActivityPub::TagManager.instance.uri_for(quoted_status),
-      }))
+          }
+        end
+        let(:content) { 'ng word test' }
+
+        it 'update status' do
+          Form::AdminSettings.new(stranger_mention_from_local_ng: '1').save
+          Fabricate(:ng_word, keyword: 'test')
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to_not eq content
+          expect(status.references.pluck(:id)).to_not include target_status.id
+        end
+
+        context 'when alice follows sender' do
+          before do
+            alice.follow!(status.account)
+          end
+
+          it 'update status' do
+            Fabricate(:ng_word, keyword: 'test')
+
+            subject.call(status, json, json)
+            expect(status.reload.text).to eq content
+            expect(status.references.pluck(:id)).to include target_status.id
+          end
+        end
+      end
+
+      context 'when using hashtag under limit' do
+        let(:json_tags) do
+          [
+            { type: 'Hashtag', name: 'a' },
+            { type: 'Hashtag', name: 'b' },
+          ]
+        end
+        let(:content) { 'ohagi is good' }
+
+        it 'update status' do
+          Form::AdminSettings.new(post_hash_tags_max: 2).save
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to eq content
+        end
+      end
+
+      context 'when using hashtag over limit' do
+        let(:json_tags) do
+          [
+            { type: 'Hashtag', name: 'a' },
+            { type: 'Hashtag', name: 'b' },
+            { type: 'Hashtag', name: 'c' },
+          ]
+        end
+        let(:content) { 'ohagi is good' }
+
+        it 'update status' do
+          Form::AdminSettings.new(post_hash_tags_max: 2).save
+
+          subject.call(status, json, json)
+          expect(status.reload.text).to_not eq content
+        end
+      end
     end
 
-    it 'updates the approval URI and verifies the quote' do
-      expect { subject.call(status, json, json) }
-        .to change(quote, :approval_uri).to(approval_uri)
-        .and change(quote, :state).to('accepted')
-    end
-  end
+    describe 'ng rule is set' do
+      context 'when ng rule is match' do
+        before do
+          Fabricate(:ng_rule, account_domain: 'example.com', status_text: 'universe')
+          subject.call(status, json, json)
+        end
 
-  context 'when the status has an existing verified quote and removes an approval link' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let!(:quote) { Fabricate(:quote, status: status, quoted_status: quoted_status, approval_uri: approval_uri, state: :accepted) }
-    let(:approval_uri) { 'https://quoted.example.com/approvals/1' }
+        it 'does not update text' do
+          expect(status.reload.text).to eq 'Hello world'
+          expect(status.edits.reload.map(&:text)).to eq []
+        end
+      end
 
-    let(:payload) do
-      {
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            '@id': 'https://w3id.org/fep/044f#quote',
-            '@type': '@id',
-          },
-          {
-            '@id': 'https://w3id.org/fep/044f#quoteAuthorization',
-            '@type': '@id',
-          },
-        ],
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-        quote: ActivityPub::TagManager.instance.uri_for(quoted_status),
-      }
+      context 'when ng rule is not match' do
+        before do
+          Fabricate(:ng_rule, account_domain: 'foo.bar', status_text: 'universe')
+          subject.call(status, json, json)
+        end
+
+        it 'updates text' do
+          expect(status.reload.text).to eq 'Hello universe'
+          expect(status.edits.reload.map(&:text)).to eq ['Hello world', 'Hello universe']
+        end
+      end
     end
 
-    it 'removes the approval URI and unverifies the quote' do
-      expect { subject.call(status, json, json) }
-        .to change(quote, :approval_uri).to(nil)
-        .and change(quote, :state).to('pending')
-    end
-  end
+    describe 'sensitive word is set' do
+      let(:payload) do
+        {
+          '@context': 'https://www.w3.org/ns/activitystreams',
+          id: 'foo',
+          type: 'Note',
+          content: content,
+          updated: '2021-09-08T22:39:25Z',
+          tag: json_tags,
+        }
+      end
 
-  context 'when the status adds a verifiable quote' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let(:approval_uri) { 'https://quoted.example.com/approvals/1' }
+      context 'when hit sensitive words' do
+        let(:content) { 'ng word aiueo' }
 
-    let(:payload) do
-      {
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            '@id': 'https://w3id.org/fep/044f#quote',
-            '@type': '@id',
-          },
-          {
-            '@id': 'https://w3id.org/fep/044f#quoteAuthorization',
-            '@type': '@id',
-          },
-        ],
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-        quote: ActivityPub::TagManager.instance.uri_for(quoted_status),
-        quoteAuthorization: approval_uri,
-      }
-    end
+        it 'update status' do
+          Fabricate(:sensitive_word, keyword: 'test', remote: true, spoiler: false)
 
-    before do
-      stub_request(:get, approval_uri).to_return(headers: { 'Content-Type': 'application/activity+json' }, body: Oj.dump({
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            QuoteAuthorization: 'https://w3id.org/fep/044f#QuoteAuthorization',
-            gts: 'https://gotosocial.org/ns#',
-            interactionPolicy: {
-              '@id': 'gts:interactionPolicy',
-              '@type': '@id',
-            },
-            interactingObject: {
-              '@id': 'gts:interactingObject',
-              '@type': '@id',
-            },
-            interactionTarget: {
-              '@id': 'gts:interactionTarget',
-              '@type': '@id',
-            },
-          },
-        ],
-        type: 'QuoteAuthorization',
-        id: approval_uri,
-        attributedTo: ActivityPub::TagManager.instance.uri_for(quoted_status.account),
-        interactingObject: ActivityPub::TagManager.instance.uri_for(status),
-        interactionTarget: ActivityPub::TagManager.instance.uri_for(quoted_status),
-      }))
-    end
+          subject.call(status, json, json)
+          expect(status.reload.text).to eq content
+          expect(status.spoiler_text).to eq ''
+        end
+      end
 
-    it 'updates the approval URI and verifies the quote' do
-      expect { subject.call(status, json, json) }
-        .to change(status, :quote).from(nil)
-      expect(status.quote.approval_uri).to eq approval_uri
-      expect(status.quote.state).to eq 'accepted'
-    end
-  end
+      context 'when not hit sensitive words' do
+        let(:content) { 'ng word test' }
 
-  context 'when the status adds a unverifiable quote' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let(:approval_uri) { 'https://quoted.example.com/approvals/1' }
+        it 'update status' do
+          Fabricate(:sensitive_word, keyword: 'test', remote: true, spoiler: false)
 
-    let(:payload) do
-      {
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            '@id': 'https://w3id.org/fep/044f#quote',
-            '@type': '@id',
-          },
-          {
-            '@id': 'https://w3id.org/fep/044f#quoteAuthorization',
-            '@type': '@id',
-          },
-        ],
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-        quote: ActivityPub::TagManager.instance.uri_for(quoted_status),
-      }
-    end
-
-    it 'updates the approval URI but does not verify the quote' do
-      expect { subject.call(status, json, json) }
-        .to change(status, :quote).from(nil)
-      expect(status.quote.approval_uri).to be_nil
-      expect(status.quote.state).to eq 'pending'
-    end
-  end
-
-  context 'when the status removes a verified quote' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let!(:quote) { Fabricate(:quote, status: status, quoted_status: quoted_status, approval_uri: approval_uri, state: :accepted) }
-    let(:approval_uri) { 'https://quoted.example.com/approvals/1' }
-
-    let(:payload) do
-      {
-        '@context': 'https://www.w3.org/ns/activitystreams',
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-      }
-    end
-
-    it 'removes the quote' do
-      expect { subject.call(status, json, json) }
-        .to change { status.reload.quote }.to(nil)
-
-      expect { quote.reload }.to raise_error(ActiveRecord::RecordNotFound)
-    end
-  end
-
-  context 'when the status removes an unverified quote' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let!(:quote) { Fabricate(:quote, status: status, quoted_status: quoted_status, approval_uri: nil, state: :pending) }
-
-    let(:payload) do
-      {
-        '@context': 'https://www.w3.org/ns/activitystreams',
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-      }
-    end
-
-    it 'removes the quote' do
-      expect { subject.call(status, json, json) }
-        .to change { status.reload.quote }.to(nil)
-
-      expect { quote.reload }.to raise_error(ActiveRecord::RecordNotFound)
-    end
-  end
-
-  context 'when the status swaps a verified quote with an unverifiable quote' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let(:second_quoted_status) { Fabricate(:status, account: quoted_account) }
-    let!(:quote) { Fabricate(:quote, status: status, quoted_status: quoted_status, approval_uri: approval_uri, state: :accepted) }
-    let(:approval_uri) { 'https://quoted.example.com/approvals/1' }
-
-    let(:payload) do
-      {
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            '@id': 'https://w3id.org/fep/044f#quote',
-            '@type': '@id',
-          },
-          {
-            '@id': 'https://w3id.org/fep/044f#quoteAuthorization',
-            '@type': '@id',
-          },
-        ],
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-        quote: ActivityPub::TagManager.instance.uri_for(second_quoted_status),
-        quoteAuthorization: approval_uri,
-      }
-    end
-
-    before do
-      stub_request(:get, approval_uri).to_return(headers: { 'Content-Type': 'application/activity+json' }, body: Oj.dump({
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            QuoteAuthorization: 'https://w3id.org/fep/044f#QuoteAuthorization',
-            gts: 'https://gotosocial.org/ns#',
-            interactionPolicy: {
-              '@id': 'gts:interactionPolicy',
-              '@type': '@id',
-            },
-            interactingObject: {
-              '@id': 'gts:interactingObject',
-              '@type': '@id',
-            },
-            interactionTarget: {
-              '@id': 'gts:interactionTarget',
-              '@type': '@id',
-            },
-          },
-        ],
-        type: 'QuoteAuthorization',
-        id: approval_uri,
-        attributedTo: ActivityPub::TagManager.instance.uri_for(quoted_status.account),
-        interactingObject: ActivityPub::TagManager.instance.uri_for(status),
-        interactionTarget: ActivityPub::TagManager.instance.uri_for(quoted_status),
-      }))
-    end
-
-    it 'updates the URI and unverifies the quote' do
-      expect { subject.call(status, json, json) }
-        .to change { status.quote.quoted_status }.from(quoted_status).to(second_quoted_status)
-        .and change { status.quote.state }.from('accepted')
-
-      expect { quote.reload }.to raise_error(ActiveRecord::RecordNotFound)
-    end
-  end
-
-  context 'when the status swaps a verified quote with another verifiable quote' do
-    let(:quoted_account) { Fabricate(:account, domain: 'quoted.example.com') }
-    let(:second_quoted_account) { Fabricate(:account, domain: 'second-quoted.example.com') }
-    let(:quoted_status) { Fabricate(:status, account: quoted_account) }
-    let(:second_quoted_status) { Fabricate(:status, account: second_quoted_account) }
-    let!(:quote) { Fabricate(:quote, status: status, quoted_status: quoted_status, approval_uri: approval_uri, state: :accepted) }
-    let(:approval_uri) { 'https://quoted.example.com/approvals/1' }
-    let(:second_approval_uri) { 'https://second-quoted.example.com/approvals/2' }
-
-    let(:payload) do
-      {
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            '@id': 'https://w3id.org/fep/044f#quote',
-            '@type': '@id',
-          },
-          {
-            '@id': 'https://w3id.org/fep/044f#quoteAuthorization',
-            '@type': '@id',
-          },
-        ],
-        id: 'foo',
-        type: 'Note',
-        summary: 'Show more',
-        content: 'Hello universe',
-        updated: '2021-09-08T22:39:25Z',
-        quote: ActivityPub::TagManager.instance.uri_for(second_quoted_status),
-        quoteAuthorization: second_approval_uri,
-      }
-    end
-
-    before do
-      stub_request(:get, second_approval_uri).to_return(headers: { 'Content-Type': 'application/activity+json' }, body: Oj.dump({
-        '@context': [
-          'https://www.w3.org/ns/activitystreams',
-          {
-            QuoteAuthorization: 'https://w3id.org/fep/044f#QuoteAuthorization',
-            gts: 'https://gotosocial.org/ns#',
-            interactionPolicy: {
-              '@id': 'gts:interactionPolicy',
-              '@type': '@id',
-            },
-            interactingObject: {
-              '@id': 'gts:interactingObject',
-              '@type': '@id',
-            },
-            interactionTarget: {
-              '@id': 'gts:interactionTarget',
-              '@type': '@id',
-            },
-          },
-        ],
-        type: 'QuoteAuthorization',
-        id: second_approval_uri,
-        attributedTo: ActivityPub::TagManager.instance.uri_for(second_quoted_status.account),
-        interactingObject: ActivityPub::TagManager.instance.uri_for(status),
-        interactionTarget: ActivityPub::TagManager.instance.uri_for(second_quoted_status),
-      }))
-    end
-
-    it 'updates the URI and unverifies the quote' do
-      expect { subject.call(status, json, json) }
-        .to change { status.quote.quoted_status }.from(quoted_status).to(second_quoted_status)
-        .and change { status.quote.approval_uri }.from(approval_uri).to(second_approval_uri)
-        .and(not_change { status.quote.state })
-
-      expect { quote.reload }.to raise_error(ActiveRecord::RecordNotFound)
+          subject.call(status, json, json)
+          expect(status.reload.text).to eq content
+          expect(status.spoiler_text).to_not eq ''
+        end
+      end
     end
   end
 

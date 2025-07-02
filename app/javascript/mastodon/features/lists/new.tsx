@@ -9,22 +9,15 @@ import { isFulfilled } from '@reduxjs/toolkit';
 
 import Toggle from 'react-toggle';
 
-import ChevronRightIcon from '@/material-icons/400-24px/chevron_right.svg?react';
 import ListAltIcon from '@/material-icons/400-24px/list_alt.svg?react';
 import { fetchList } from 'mastodon/actions/lists';
 import { createList, updateList } from 'mastodon/actions/lists_typed';
 import { apiGetAccounts } from 'mastodon/api/lists';
-import type { ApiAccountJSON } from 'mastodon/api_types/accounts';
 import type { RepliesPolicyType } from 'mastodon/api_types/lists';
-import { Avatar } from 'mastodon/components/avatar';
-import { AvatarGroup } from 'mastodon/components/avatar_group';
 import { Column } from 'mastodon/components/column';
 import { ColumnHeader } from 'mastodon/components/column_header';
-import { Icon } from 'mastodon/components/icon';
 import { LoadingIndicator } from 'mastodon/components/loading_indicator';
 import { useAppDispatch, useAppSelector } from 'mastodon/store';
-
-import { messages as membersMessages } from './members';
 
 const messages = defineMessages({
   edit: { id: 'column.edit_list', defaultMessage: 'Edit list' },
@@ -34,40 +27,42 @@ const messages = defineMessages({
 const MembersLink: React.FC<{
   id: string;
 }> = ({ id }) => {
-  const intl = useIntl();
-  const [avatarCount, setAvatarCount] = useState(0);
-  const [avatarAccounts, setAvatarAccounts] = useState<ApiAccountJSON[]>([]);
+  const [count, setCount] = useState(0);
+  const [avatars, setAvatars] = useState<string[]>([]);
 
   useEffect(() => {
     void apiGetAccounts(id)
       .then((data) => {
-        setAvatarCount(data.length);
-        setAvatarAccounts(data.slice(0, 3));
+        setCount(data.length);
+        setAvatars(data.slice(0, 3).map((a) => a.avatar));
+        return '';
       })
       .catch(() => {
         // Nothing
       });
-  }, [id]);
+  }, [id, setCount, setAvatars]);
 
   return (
     <Link to={`/lists/${id}/members`} className='app-form__link'>
       <div className='app-form__link__text'>
         <strong>
-          {intl.formatMessage(membersMessages.manageMembers)}
-          <Icon id='chevron_right' icon={ChevronRightIcon} />
+          <FormattedMessage
+            id='lists.list_members'
+            defaultMessage='List members'
+          />
         </strong>
         <FormattedMessage
           id='lists.list_members_count'
           defaultMessage='{count, plural, one {# member} other {# members}}'
-          values={{ count: avatarCount }}
+          values={{ count }}
         />
       </div>
 
-      <AvatarGroup compact>
-        {avatarAccounts.map((a) => (
-          <Avatar key={a.id} account={a} size={30} />
+      <div className='avatar-pile'>
+        {avatars.map((url) => (
+          <img key={url} src={url} alt='' />
         ))}
-      </AvatarGroup>
+      </div>
     </Link>
   );
 };
@@ -86,6 +81,8 @@ const NewList: React.FC<{
   const [title, setTitle] = useState('');
   const [exclusive, setExclusive] = useState(false);
   const [repliesPolicy, setRepliesPolicy] = useState<RepliesPolicyType>('list');
+  const [notify, setNotify] = useState(false);
+  const [favourite, setFavourite] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -99,8 +96,18 @@ const NewList: React.FC<{
       setTitle(list.title);
       setExclusive(list.exclusive);
       setRepliesPolicy(list.replies_policy);
+      setNotify(list.notify);
+      setFavourite(list.favourite);
     }
-  }, [setTitle, setExclusive, setRepliesPolicy, id, list]);
+  }, [
+    setTitle,
+    setExclusive,
+    setRepliesPolicy,
+    setNotify,
+    setFavourite,
+    id,
+    list,
+  ]);
 
   const handleTitleChange = useCallback(
     ({ target: { value } }: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,6 +130,20 @@ const NewList: React.FC<{
     [setRepliesPolicy],
   );
 
+  const handleNotifyChange = useCallback(
+    ({ target: { checked } }: React.ChangeEvent<HTMLInputElement>) => {
+      setNotify(checked);
+    },
+    [setNotify],
+  );
+
+  const handleFavouriteChange = useCallback(
+    ({ target: { checked } }: React.ChangeEvent<HTMLInputElement>) => {
+      setFavourite(checked);
+    },
+    [setFavourite],
+  );
+
   const handleSubmit = useCallback(() => {
     setSubmitting(true);
 
@@ -133,6 +154,8 @@ const NewList: React.FC<{
           title,
           exclusive,
           replies_policy: repliesPolicy,
+          notify,
+          favourite,
         }),
       ).then(() => {
         setSubmitting(false);
@@ -144,6 +167,8 @@ const NewList: React.FC<{
           title,
           exclusive,
           replies_policy: repliesPolicy,
+          notify,
+          favourite,
         }),
       ).then((result) => {
         setSubmitting(false);
@@ -156,7 +181,17 @@ const NewList: React.FC<{
         return '';
       });
     }
-  }, [history, dispatch, setSubmitting, id, title, exclusive, repliesPolicy]);
+  }, [
+    history,
+    dispatch,
+    setSubmitting,
+    id,
+    title,
+    exclusive,
+    repliesPolicy,
+    notify,
+    favourite,
+  ]);
 
   return (
     <Column
@@ -243,6 +278,16 @@ const NewList: React.FC<{
               <MembersLink id={id} />
             </div>
           )}
+          {!id && (
+            <div className='fields-group'>
+              <div className='app-form__memo'>
+                <FormattedMessage
+                  id='lists.save_to_edit_member'
+                  defaultMessage='You can edit list members after saving.'
+                />
+              </div>
+            </div>
+          )}
 
           <div className='fields-group'>
             {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
@@ -267,6 +312,61 @@ const NewList: React.FC<{
                   <Toggle
                     checked={exclusive}
                     onChange={handleExclusiveChange}
+                  />
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div className='fields-group'>
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+            <label className='app-form__toggle'>
+              <div className='app-form__toggle__label'>
+                <strong>
+                  <FormattedMessage
+                    id='lists.notify'
+                    defaultMessage='Notify list'
+                  />
+                </strong>
+                <span className='hint'>
+                  <FormattedMessage
+                    id='lists.notify_hint'
+                    defaultMessage='Notify when new post is added.'
+                  />
+                </span>
+              </div>
+
+              <div className='app-form__toggle__toggle'>
+                <div>
+                  <Toggle checked={notify} onChange={handleNotifyChange} />
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div className='fields-group'>
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+            <label className='app-form__toggle'>
+              <div className='app-form__toggle__label'>
+                <strong>
+                  <FormattedMessage
+                    id='lists.favourite'
+                    defaultMessage='Favorite'
+                  />
+                </strong>
+                <span className='hint'>
+                  <FormattedMessage
+                    id='lists.favourite_hint'
+                    defaultMessage='When opening the Web Client on a PC, this list appears in the navigation.'
+                  />
+                </span>
+              </div>
+
+              <div className='app-form__toggle__toggle'>
+                <div>
+                  <Toggle
+                    checked={favourite}
+                    onChange={handleFavouriteChange}
                   />
                 </div>
               </div>

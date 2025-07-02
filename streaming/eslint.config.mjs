@@ -1,7 +1,5 @@
 // @ts-check
 
-import path from 'node:path';
-
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -22,9 +20,7 @@ export default tseslint.config([
     settings: {
       'import/ignore': ['node_modules', '\\.(json)$'],
       'import/resolver': {
-        typescript: {
-          project: path.resolve(import.meta.dirname, './tsconfig.json'),
-        },
+        typescript: {},
       },
     },
 

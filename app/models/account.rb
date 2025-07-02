@@ -17,11 +17,9 @@
 #  url                           :string
 #  avatar_file_name              :string
 #  avatar_content_type           :string
-#  avatar_file_size              :integer
 #  avatar_updated_at             :datetime
 #  header_file_name              :string
 #  header_content_type           :string
-#  header_file_size              :integer
 #  header_updated_at             :datetime
 #  avatar_remote_url             :string
 #  locked                        :boolean          default(FALSE), not null
@@ -49,7 +47,13 @@
 #  trendable                     :boolean
 #  reviewed_at                   :datetime
 #  requested_review_at           :datetime
+#  searchability                 :integer          default("direct"), not null
+#  settings                      :jsonb
 #  indexable                     :boolean          default(FALSE), not null
+#  master_settings               :jsonb
+#  remote_pending                :boolean          default(FALSE), not null
+#  avatar_file_size              :integer
+#  header_file_size              :integer
 #  attribution_domains           :string           default([]), is an Array
 #
 
@@ -67,7 +71,7 @@ class Account < ApplicationRecord
   BACKGROUND_REFRESH_INTERVAL = 1.week.freeze
   REFRESH_DEADLINE = 6.hours
   STALE_THRESHOLD = 1.day
-  DEFAULT_FIELDS_SIZE = 4
+  DEFAULT_FIELDS_SIZE = 6
   INSTANCE_ACTOR_ID = -99
 
   USERNAME_RE   = /[a-z0-9_]+([.-]+[a-z0-9_]+)*/i
@@ -85,16 +89,16 @@ class Account < ApplicationRecord
   include Account::Associations
   include Account::Avatar
   include Account::Counters
-  include Account::FaspConcern
   include Account::FinderConcern
   include Account::Header
   include Account::Interactions
-  include Account::Mappings
   include Account::Merging
   include Account::Search
   include Account::Sensitizes
   include Account::Silences
   include Account::StatusesSearch
+  include Account::OtherSettings
+  include Account::MasterSettings
   include Account::Suspensions
   include Account::AttributionDomains
   include DomainMaterializable
@@ -104,6 +108,7 @@ class Account < ApplicationRecord
 
   enum :protocol, { ostatus: 0, activitypub: 1 }
   enum :suspension_origin, { local: 0, remote: 1 }, prefix: true
+  enum :searchability, { public: 0, private: 1, direct: 2, limited: 3, unsupported: 4, public_unlisted: 10 }, suffix: :searchability
 
   validates :username, presence: true
   validates_with UniqueUsernameValidator, if: -> { will_save_change_to_username? }
@@ -163,7 +168,6 @@ class Account < ApplicationRecord
   after_update_commit :trigger_update_webhooks
 
   delegate :email,
-           :email_domain,
            :unconfirmed_email,
            :current_sign_in_at,
            :created_at,
@@ -221,7 +225,27 @@ class Account < ApplicationRecord
     actor_type == 'Group'
   end
 
+  def group=(val)
+    self.actor_type = ActiveModel::Type::Boolean.new.cast(val) ? 'Group' : 'Person'
+  end
+
   alias group group?
+
+  def my_actor_type
+    if actor_type == 'Service'
+      'bot'
+    else
+      actor_type == 'Group' ? 'group' : 'person'
+    end
+  end
+
+  def my_actor_type=(val)
+    self.actor_type = if val == 'bot'
+                        'Service'
+                      else
+                        val == 'group' ? 'Group' : 'Person'
+                      end
+  end
 
   def acct
     local? ? username : "#{username}@#{domain}"
@@ -267,6 +291,18 @@ class Account < ApplicationRecord
 
   def sign?
     true
+  end
+
+  def public_statuses_count
+    hide_statuses_count? ? 0 : statuses_count
+  end
+
+  def public_following_count
+    hide_following_count? ? 0 : following_count
+  end
+
+  def public_followers_count
+    hide_followers_count? ? 0 : followers_count
   end
 
   def previous_strikes_count
@@ -452,6 +488,10 @@ class Account < ApplicationRecord
 
     generate_keys
     save!
+  end
+
+  def compute_searchability_activitypub
+    local? ? 'public' : searchability
   end
 
   private

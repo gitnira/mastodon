@@ -11,6 +11,9 @@ const ListFactory = Record<ListShape>({
   title: '',
   exclusive: false,
   replies_policy: 'list',
+  notify: false,
+  favourite: true,
+  antennas: [],
 });
 
 export function createList(attributes: Partial<ListShape>) {

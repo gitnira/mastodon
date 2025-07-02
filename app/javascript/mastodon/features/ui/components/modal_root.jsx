@@ -12,6 +12,9 @@ import {
   ReportModal,
   EmbedModal,
   ListAdder,
+  AntennaAdder,
+  CircleAdder,
+  BookmarkCategoryAdder,
   CompareHistoryModal,
   FilterModal,
   InteractionModal,
@@ -20,16 +23,20 @@ import {
   IgnoreNotificationsModal,
   AnnualReportModal,
 } from 'mastodon/features/ui/util/async-components';
+import { getScrollbarWidth } from 'mastodon/utils/scrollbar';
 
 import BundleContainer from '../containers/bundle_container';
 
-import { ActionsModal } from './actions_modal';
+import ActionsModal from './actions_modal';
 import AudioModal from './audio_modal';
 import { BoostModal } from './boost_modal';
 import {
   ConfirmationModal,
   ConfirmDeleteStatusModal,
   ConfirmDeleteListModal,
+  ConfirmDeleteAntennaModal,
+  ConfirmDeleteCircleModal,
+  ConfirmDeleteBookmarkCategoryModal,
   ConfirmReplyModal,
   ConfirmEditStatusModal,
   ConfirmUnfollowModal,
@@ -52,6 +59,9 @@ export const MODAL_COMPONENTS = {
   'CONFIRM': () => Promise.resolve({ default: ConfirmationModal }),
   'CONFIRM_DELETE_STATUS': () => Promise.resolve({ default: ConfirmDeleteStatusModal }),
   'CONFIRM_DELETE_LIST': () => Promise.resolve({ default: ConfirmDeleteListModal }),
+  'CONFIRM_DELETE_ANTENNA': () => Promise.resolve({ default: ConfirmDeleteAntennaModal }),
+  'CONFIRM_DELETE_CIRCLE': () => Promise.resolve({ default: ConfirmDeleteCircleModal }),
+  'CONFIRM_DELETE_BOOKMARK_CATEGORY': () => Promise.resolve({ default: ConfirmDeleteBookmarkCategoryModal }),
   'CONFIRM_REPLY': () => Promise.resolve({ default: ConfirmReplyModal }),
   'CONFIRM_EDIT_STATUS': () => Promise.resolve({ default: ConfirmEditStatusModal }),
   'CONFIRM_UNFOLLOW': () => Promise.resolve({ default: ConfirmUnfollowModal }),
@@ -67,6 +77,9 @@ export const MODAL_COMPONENTS = {
   'EMBED': EmbedModal,
   'FOCAL_POINT': () => Promise.resolve({ default: AltTextModal }),
   'LIST_ADDER': ListAdder,
+  'ANTENNA_ADDER': AntennaAdder,
+  'CIRCLE_ADDER': CircleAdder,
+  'BOOKMARK_CATEGORY_ADDER': BookmarkCategoryAdder,
   'COMPARE_HISTORY': CompareHistoryModal,
   'FILTER': FilterModal,
   'SUBSCRIBED_LANGUAGES': SubscribedLanguagesModal,
@@ -88,6 +101,20 @@ export default class ModalRoot extends PureComponent {
   state = {
     backgroundColor: null,
   };
+
+  getSnapshotBeforeUpdate () {
+    return { visible: !!this.props.type };
+  }
+
+  componentDidUpdate (prevProps, prevState, { visible }) {
+    if (visible) {
+      document.body.classList.add('with-modals--active');
+      document.documentElement.style.marginRight = `${getScrollbarWidth()}px`;
+    } else {
+      document.body.classList.remove('with-modals--active');
+      document.documentElement.style.marginRight = '0';
+    }
+  }
 
   setBackgroundColor = color => {
     this.setState({ backgroundColor: color });
